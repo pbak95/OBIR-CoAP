@@ -43,7 +43,12 @@ void setup(void)
   SPI.begin();
   radio.begin();
   network.begin(/*channel*/ 110, /*node address*/ this_node);
-  Ethernet.begin(mac);
+ if (Ethernet.begin(mac) == 0) {
+    Serial.println("Failed to configure Ethernet using DHCP");
+    // no point in carrying on, so do nothing forevermore:
+    for(;;)
+      ;
+  }
   Serial.println("IP: ");
   Serial.println(Ethernet.localIP());
   Serial.println("Port: 1238");
@@ -107,42 +112,137 @@ void loop(void) {
     Udp.read(packetBuffer, MAX_BUFFER);
     Serial.println(packetSize);
 
-//ZOSTAWIŁEM ZEBY JUŻ NIE SKAKAĆ I BYŁ WZÓR Z LABY
+    /*0                   1                   2                   3
+        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |Ver| T |  TKL  |      Code     |          Message ID           |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |   Token (if any, TKL bytes) ...
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |   Options (if any) ...
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |1 1 1 1 1 1 1 1|    Payload (if any) ...
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    */
 
-//    byte data[packetSize - 5];
-//    int j = 0;
-//    for (int i = 5; i < packetSize; i++)
-//    {
-//      data[j] = packetBuffer[i];
-//      j++;
-//    }
-//    if (data[0] == 71 && sended == false) {
-//      //get
-//      sended = true;
-//      Serial.println("get");
-//      Serial.println(level);
-//      Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-//      sprintf(sendBuffer, "%x", level);
-//      int r = Udp.write(sendBuffer, sizeof(sendBuffer));
-//      Serial.println(r);
-//      Udp.endPacket();
-//    }
-//    if (data[0] == 83) {
-//      //set
-//      level = 0;
-//      Serial.println("set");
-//      for (int i = 0; i < packetSize - 6; i++) {
-//        if (data[packetSize - 6 - i] != 10) {
-//          Serial.println(i);
-//          int temp = (data[packetSize - 6 - i] - 48) * pow(10, i);
-//          Serial.println(temp);
-//          level += temp;
-//        }
-//      }
-//      level += 1;
-//      level = level / 10;
-//      Serial.println(level);
-//      analogWrite(3, level);
-//    }
+    //header is first 4B of coap message
+    int header_length = 4;
+
+    //header analysis
+    //field version no. value=01
+    uint8_t ver = packetBuffer[0] >> 6;
+
+    //field message type CON(0) NON(1) ACK(2) RST(3)
+    uint8_t T = (packetBuffer[0] & 00110000) >> 4;
+    if(T == 1)
+    {
+      Serial.println("Type: NON");
+    }
+    else
+    {
+      Serial.println("Type: other");
+    }
+
+    //field token length 0-255
+    uint8_t TKL = packetBuffer[0] & 00001111;
+    Serial.print("TKL: ");
+    Serial.println(TKL, DEC);
+
+    //field code class request(0) success response(010) client error response(100) server error response(101)
+    uint8_t code_class = packetBuffer[1] >> 5;
+
+    //field code detail empty(00000) GET(00001) POST(00010) PUT(00011) DELETE(00100) (dd) for response
+    uint8_t code_detail = packetBuffer[1] & 00011111;
+
+    Serial.print("Code: ");
+    Serial.print(code_class, DEC);
+    Serial.print(".");
+    Serial.println(code_detail, DEC);
+
+    switch(code_class)
+    {
+      case 0:
+      {
+        //request
+       if(code_detail == 1)
+       {
+        //GET
+        Serial.println("GET request");
+       }
+       else if(code_detail == 3)
+       {
+        //PUT
+        Serial.println("PUT request");
+       }
+       else
+       {
+        Serial.println("Different request");
+       }
+      }
+      case 2:
+      {
+        //success response
+        Serial.println("success response");
+      }
+      case 4:
+      {
+        //client error response
+        Serial.println("client error response");
+      }
+      case 5:
+      {
+        //server error response
+        Serial.println("server error response");
+      }
+    }
+
+    //field messageID
+    uint16_t MessageID = ((uint16_t)packetBuffer[2] << 8) | packetBuffer[3];
+    Serial.println(MessageID, HEX);
+
+    //if exists read token with TKL Bytes
+    if(TKL != 0)
+    {
+      byte token[TKL];
+      for(int i=0; i< TKL; ++i)
+      {
+        token[i] = packetBuffer[i + header_length];
+      }
+    }
+
+    //iterator
+    int iter = TKL;
+
+    //until byte is not flag 11111111
+    byte options[MAX_BUFFER];
+    while(packetBuffer[header_length + iter] != 11111111)
+    {
+      options[iter] = packetBuffer[header_length + iter];
+      ++iter;
+    }
+
+    //TODO analyze options 4b Option Delta 4b Option Length
+    //Option Length B Option Value and so on
+    int opt_iter=0;
+    while(opt_iter < sizeof(options)/sizeof(options[0]))
+    {
+      uint8_t opt_delta = options[opt_iter] >> 4;
+      uint8_t opt_length = options[opt_iter] & 00001111;
+      byte opt_value[opt_length];
+      for(int i = 0;i < opt_length; ++i)
+      {
+        ++opt_iter;
+        opt_value[i] = options[opt_iter];
+      }
+      ++opt_iter;
+    }
+
+    ++iter;
+    //rest is payload
+    byte payload[packetSize - iter];
+    for(int j = 0; j < packetSize - iter; ++j)
+    {
+      payload[j] = packetBuffer[iter + j];
+    }
   }
 }
