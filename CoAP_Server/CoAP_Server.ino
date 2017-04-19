@@ -56,11 +56,10 @@ void setup(void)
 
 }
 void loop(void) {
-
   network.update();                  // Checking the network regularly
 
   //MESSAGE FROM SMART OBJECT
-  while ( network.available() ) {     // Checking if any data is avaliable
+  if ( network.available() ) {     // Checking if any data is avaliable
     RF24NetworkHeader header;        // header struct, which is send with each message
     payload_t payload;              // payload initialization
     network.read(header, &payload, sizeof(payload));
@@ -103,7 +102,6 @@ void loop(void) {
     // clear the string for new input:
     //radio.startListening();
     inString = "";
-
   }
 
   //ETHERNET PART
@@ -133,7 +131,7 @@ void loop(void) {
     uint8_t ver = packetBuffer[0] >> 6;
 
     //field message type CON(0) NON(1) ACK(2) RST(3)
-    uint8_t T = (packetBuffer[0] & 00110000) >> 4;
+    uint8_t T = (packetBuffer[0] >> 4)& 3;
     if(T == 1)
     {
       Serial.println("Type: NON");
@@ -144,15 +142,16 @@ void loop(void) {
     }
 
     //field token length 0-255
-    uint8_t TKL = packetBuffer[0] & 00001111;
+    Serial.println(packetBuffer[0], BIN);
+    uint8_t TKL = packetBuffer[0] & 15;
     Serial.print("TKL: ");
-    Serial.println(TKL, DEC);
+    Serial.println(TKL, BIN);
 
     //field code class request(0) success response(010) client error response(100) server error response(101)
     uint8_t code_class = packetBuffer[1] >> 5;
 
     //field code detail empty(00000) GET(00001) POST(00010) PUT(00011) DELETE(00100) (dd) for response
-    uint8_t code_detail = packetBuffer[1] & 00011111;
+    uint8_t code_detail = packetBuffer[1] & 31;
 
     Serial.print("Code: ");
     Serial.print(code_class, DEC);
@@ -178,21 +177,25 @@ void loop(void) {
        {
         Serial.println("Different request");
        }
+       break;
       }
       case 2:
       {
         //success response
         Serial.println("success response");
+        break;
       }
       case 4:
       {
         //client error response
         Serial.println("client error response");
+        break;
       }
       case 5:
       {
         //server error response
         Serial.println("server error response");
+        break;
       }
     }
 
@@ -211,30 +214,30 @@ void loop(void) {
     }
 
     //iterator
-    int iter = TKL;
+    int iter = header_length + TKL;
 
     //until byte is not flag 11111111
     byte options[MAX_BUFFER];
-    while(packetBuffer[header_length + iter] != 11111111)
-    {
-      options[iter] = packetBuffer[header_length + iter];
-      ++iter;
-    }
 
     //TODO analyze options 4b Option Delta 4b Option Length
     //Option Length B Option Value and so on
     int opt_iter=0;
-    while(opt_iter < sizeof(options)/sizeof(options[0]))
+    while(packetBuffer[iter] != 255)
     {
-      uint8_t opt_delta = options[opt_iter] >> 4;
-      uint8_t opt_length = options[opt_iter] & 00001111;
+      Serial.println("debug2");
+      uint8_t opt_delta = packetBuffer[iter] >> 4;
+      Serial.println(opt_delta, BIN);
+      uint8_t opt_length = packetBuffer[iter] & 15;
+      Serial.println(opt_length, BIN);
       byte opt_value[opt_length];
       for(int i = 0;i < opt_length; ++i)
       {
-        ++opt_iter;
-        opt_value[i] = options[opt_iter];
+        ++iter;
+        opt_value[i] = packetBuffer[iter];
+        Serial.println(opt_value[i], BIN);
       }
-      ++opt_iter;
+      //TODO check whick option and do stuff
+      ++iter;
     }
 
     ++iter;
@@ -243,6 +246,7 @@ void loop(void) {
     for(int j = 0; j < packetSize - iter; ++j)
     {
       payload[j] = packetBuffer[iter + j];
+      Serial.println(payload[j]);
     }
   }
 }
