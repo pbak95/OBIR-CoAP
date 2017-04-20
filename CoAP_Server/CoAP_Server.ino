@@ -219,9 +219,9 @@ void loop(void) {
     //until byte is not flag 11111111
     byte options[MAX_BUFFER];
 
-    //TODO analyze options 4b Option Delta 4b Option Length
-    //Option Length B Option Value and so on
-    int opt_iter=0;
+    //number that indicates option
+    uint8_t option_no = 0;
+    //loop until flag 11111111 that ends header
     while(packetBuffer[iter] != 255)
     {
       Serial.println("debug2");
@@ -237,6 +237,40 @@ void loop(void) {
         Serial.println(opt_value[i], BIN);
       }
       //TODO check whick option and do stuff
+      option_no += opt_delta;
+      switch(option_no)
+      {
+        case 4:
+        {
+          Serial.println("ETag option");
+          break;
+        }
+        case 11:
+        {
+          Serial.println("Uri-Path option");
+          break;
+        }
+        case 12:
+        {
+          Serial.println("Content-Format option");
+          break;
+        }
+        case 17:
+        {
+          Serial.println("Accept option");
+          break;
+        }
+        case 23:
+        {
+          Serial.println("Block2 option");
+          break;
+        }
+        case 28:
+        {
+          Serial.println("Size2 option");
+          break;
+        }
+      }
       ++iter;
     }
 
