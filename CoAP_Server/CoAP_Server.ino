@@ -13,20 +13,14 @@ RF24Network network(radio);      // Network uses that radio
 const uint16_t this_node = 00;    // Address of our node in Octal format ( 04,031, etc)
 const uint16_t other_node = 01;   // Address of the other node in Octal format
 
-    /*0                   1                
-        0 1 2 3 4 5 6 7 8 0 1 2 3 4 5 6 7 8 
-       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
-       |Opr|  Resource  |  Payload...     |
-       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
-    */
-    /*
-     Opr:
-     00 GET
-     01 PUT
-     Resource:
-     000000 LIGHT
-     000001 BUTTON
-     */
+
+
+//Structure of payload sending to smart object
+struct payload_t {
+  uint8_t header;
+  byte payload[5];
+};
+
 //ETHERNET PART
 byte mac[] = {0x00, 0xaa, 0xbb, 0xcc, 0xde, 0xf4}; //MAC address of ehernet shield
 const int MAX_BUFFER = 80;
@@ -67,7 +61,9 @@ void loop(void) {
   //MESSAGE FROM SMART OBJECT
   if ( network.available() ) {     // Checking if any data is avaliable
     RF24NetworkHeader header;        // header struct, which is send with each message
+    payload_t payload;              // payload initialization
     network.read(header, &payload, sizeof(payload));
+   
   }
 
 
@@ -84,13 +80,9 @@ void loop(void) {
     Serial.println(valueToSend, DEC);
     Serial.print("String: ");
     Serial.println(inString);
-    uint8_t test_operation = 0;
-    uint8_t test_resource = 0;
-    payload_t payload;
-    payload.operation = test_operation;
-    payload.resource = test_resource;
     RF24NetworkHeader header(/*to node*/ other_node);
     //radio.stopListening();
+    payload_t payload;
     bool ok = network.write(header, &payload, sizeof(payload));
     if (ok)
       Serial.println("Sending payload OK.");
