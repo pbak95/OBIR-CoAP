@@ -13,14 +13,26 @@ RF24Network network(radio);      // Network uses that radio
 const uint16_t this_node = 00;    // Address of our node in Octal format ( 04,031, etc)
 const uint16_t other_node = 01;   // Address of the other node in Octal format
 
+//PAYLOAD CONSTS
+//1) Operations
+const uint8_t GET = 0;
+const uint8_t PUT = 1;
+//2) Resources
+const uint8_t LIGHT = 0;
+const uint8_t BUTTON = 1;
+const uint8_t RADIO = 2;
+
 //Structure of payload sending to smart object
 struct payload_t {
-  unsigned long ms;
-  unsigned long counter;
-  unsigned short adc;
+  uint8_t operation;  //operation GET/PUT
+  uint8_t resource;   //resource type
+  uint16_t intensity; //light intensity
+  int button_state;   //button state
+  unsigned long ms;   //last button pressed in milis
+  uint32_t payloads_failures; //number of failures for all transmitted payloads
+  uint32_t payloads_successes; //number of successes for all transmitted payloads
+  bool test_carrier; //check if carrier was on the line for previous listening period
 };
-//packets counter for debug
-unsigned long packets_sent;
 
 //ETHERNET PART
 byte mac[] = {0x00, 0xaa, 0xbb, 0xcc, 0xde, 0xf4}; //MAC address of ehernet shield
@@ -36,6 +48,7 @@ String inString = "";
 
 void setup(void)
 {
+  
   Serial.begin(115200);
   Serial.println("Starting CoAP Server:");
   Serial.println("Radio channel: 110");
@@ -63,14 +76,39 @@ void loop(void) {
     RF24NetworkHeader header;        // header struct, which is send with each message
     payload_t payload;              // payload initialization
     network.read(header, &payload, sizeof(payload));
-    Serial.println("Received value #");
-    Serial.print(payload.counter);
-    Serial.print(" at ");
-    Serial.print(payload.ms);
-    Serial.println(" IN HEX: ");
-    Serial.print(payload.adc, HEX);
-    Serial.println(" /////////");
-
+    switch(payload.resource){
+      case 0:
+      { 
+        if(payload.operation == 0){
+          Serial.println("GET, light intensity: ");
+        }else{
+          Serial.println("PUT, light intensity: ");
+        }
+        Serial.println(payload.intensity,DEC);
+        break;
+      }
+      case 1:
+      {
+        Serial.println("Button state: ");
+        Serial.println(payload.button_state,DEC);
+        Serial.println("Previous button pressed: ");
+        Serial.print(payload.ms,DEC);
+        break;
+      }
+      case 2:
+      {
+        Serial.println("Success payload send number: ");
+        Serial.println(payload.payloads_successes);
+        Serial.println("Failed payload send number: ");
+        Serial.print(payload.payloads_failures);
+        if(payload.test_carrier){
+          Serial.println("Carrier was on the line for the previous listening period.");
+        }else{
+          Serial.println("Carrier wasn't on the line for the previous listening period.");
+        }
+        break;
+      }
+    }
   }
 
 
@@ -87,18 +125,18 @@ void loop(void) {
     Serial.println(valueToSend, DEC);
     Serial.print("String: ");
     Serial.println(inString);
-    unsigned long now = millis();
+    uint8_t test_operation = 0;
+    uint8_t test_resource = 0;
     payload_t payload;
-    payload.ms = now;
-    payload.counter = packets_sent++;
-    payload.adc  = valueToSend;
+    payload.operation = test_operation;
+    payload.resource = test_resource;
     RF24NetworkHeader header(/*to node*/ other_node);
     //radio.stopListening();
     bool ok = network.write(header, &payload, sizeof(payload));
     if (ok)
-      Serial.println("Sending frequency OK.");
+      Serial.println("Sending payload OK.");
     else
-      Serial.println("Sending frequency FAILED.");
+      Serial.println("Sending payload FAILED.");
     // clear the string for new input:
     //radio.startListening();
     inString = "";
