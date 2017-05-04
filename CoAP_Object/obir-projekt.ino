@@ -5,7 +5,7 @@
 RF24 radio(7, 8);
 RF24Network network(radio);
 
-unsigned int default_light_state = 1000; //domyslna ustwiona wartosc lapmki
+unsigned long default_light_state = 1000; //domyslna ustwiona wartosc lapmki
 int zmiennak = 0;
 int tab[4];
 unsigned long start = 0;
@@ -22,7 +22,7 @@ void setup() {
   Serial.begin(57600);
   SPI.begin();
   radio.begin();
-  network.begin(110, this_node); // 110 - wspólny kanał, 1 - identyfikator swojego wezła
+  network.begin(110, this_node); // 110 - wspĂłlny kanaĹ‚, 1 - identyfikator swojego wezĹ‚a
   pinMode(2, INPUT); // przycisk monostabilny
   pinMode(3, OUTPUT); // lampka
   analogWrite(3,  255 - default_light_state * 255 / 1000);
@@ -39,20 +39,21 @@ void loop() {
     tab[i] = Serial.read();
     tab[i] = tab[i] - 48;
     zmiennak += tab[i] * pow(10, (3 - i));
-    i++;
     default_light_state = zmiennak;
+    Serial.println(zmiennak);
     if (i == 3)
     {
       default_light_state++;
       analogWrite(3, 255 - default_light_state * 255 / 1000);
     }
+    i++;
   }
   zmiennak = 0;
 
 
   if (digitalRead(2) == LOW)
   {
-    //wlącznik jest nacisniety
+    //włącznik jest nacisniety
     start = millis();
     digitalWrite(2, HIGH);
   }
@@ -103,7 +104,7 @@ void loop() {
         Serial.println(resource);
         if (digitalRead(2) == LOW)
         {
-          //wlącznik jest nacisniety
+          //wlacznik jest nacisniety
           button_position = 255;
           Serial.print("Button state: ");
           Serial.println(button_position);
@@ -111,7 +112,7 @@ void loop() {
         }
         else
         {
-          //włącznik jest zwolniony
+          //wlacznik jest zwolniony
           button_position = 0;
           Serial.print("Button state: ");
           Serial.println(button_position);
