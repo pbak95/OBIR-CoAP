@@ -1,11 +1,18 @@
+#include <RF24Network.h>
+#include <RF24Network_config.h>
+#include <Sync.h>
+
+#include <nRF24L01.h>
+#include <RF24.h>
+#include <RF24_config.h>
+
 /**
    Implementation of CoAP Server
 */
-#include <RF24Network.h>
-#include <RF24.h>
 #include <SPI.h>
 #include <Ethernet.h>
 #include <EthernetUdp.h>
+#include <string.h>
 
 //RADIO PART
 RF24 radio(7, 8);               // nRF24L01(+) creating of RF24 object
@@ -18,12 +25,8 @@ const uint16_t other_node = 01;   // Address of the other node in Octal format
 //Structure of payload sending to smart object
 struct frame_t {
   uint8_t header;
-  byte payload[5];
-};
-
-union ArrayToInteger {
-  byte array[4];
-  uint32_t integer;
+  uint8_t state;
+  uint32_t value;
 };
 
 //ETHERNET PART
@@ -40,13 +43,14 @@ String inString = "";
 
 void setup(void)
 {
-  
+  radio.begin();
   Serial.begin(115200);
   Serial.println("Starting CoAP Server:");
-  Serial.println("Radio channel: 110");
-  Serial.println("Radio address: 00");
+  Serial.println("Radio channel:");
+  Serial.println(110, DEC);
+  Serial.println("Radio address:");
+  Serial.println(this_node,OCT);
   SPI.begin();
-  radio.begin();
   network.begin(/*channel*/ 110, /*node address*/ this_node);
 // if (Ethernet.begin(mac) == 0) {
 //    Serial.println("Failed to configure Ethernet using DHCP");
@@ -64,30 +68,28 @@ void loop(void) {
   network.update();                  // Checking the network regularly
 
 //MESSAGE FROM SMART OBJECT
-  if ( network.available() ) {     // Checking if any data is avaliable
+  while (network.available() ) {     // Checking if any data is avaliable
     RF24NetworkHeader header;        // header struct, which is send with each message
     frame_t message;              // payload initialization
     network.read(header, &message, sizeof(message));
     uint8_t operation = message.header >> 6;
     uint8_t resource = message.header & 63;
-    ArrayToInteger converter = {message.payload[1],message.payload[2],message.payload[3],message.payload[4]};
     if(resource == 0){
      Serial.println("LIGHT"); 
      if(operation == 0){
       Serial.println("GET");
       Serial.println("Light intensity");
-      Serial.println(converter.integer);
+      Serial.println(message.value);
      }else{
       Serial.println("PUT");
       Serial.println("Light intensity set");
-      Serial.println(converter.integer);
+      Serial.println(message.value);
      }
     }else if(resource == 1){
       Serial.println("BUTTON");
-      uint8_t state = message.payload[0];
       Serial.println("button state and time");
-      Serial.println(state);
-      Serial.println(converter.integer);
+      Serial.println(message.state);
+      Serial.println(message.value);
     }
    
   }
@@ -99,12 +101,17 @@ void loop(void) {
     Serial.print("String: ");
     Serial.println(inString);
     RF24NetworkHeader header(/*to node*/ other_node);
-    //radio.stopListening();
     frame_t message;
     if(inString[0] == 'G'){
-      message.header = 0;
-    }else{
-      message.header = 1;
+      message.header = 0; // get i lampla
+      
+    }else if(inString[0] == 'B'){
+    message.header = 1;
+    }
+    else{
+      message.header = 64;
+      message.value = 500;
+      Serial.print(message.value,DEC);
     }
     bool test = radio.testCarrier();
     if(test){
