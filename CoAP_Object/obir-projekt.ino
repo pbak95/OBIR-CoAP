@@ -12,6 +12,7 @@ RF24Network network(radio);
 unsigned long default_light_state = 1000; //domyslna ustwiona wartosc lapmki
 int zmiennak = 0;
 int tab[4];
+int j = 0;
 unsigned long czas = 0;
 unsigned long start = 0;
 const uint16_t this_node = 01;
@@ -40,7 +41,6 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   network.update(); // Check the network regularly
-
   int i = 0;
   while (Serial.available())
   {
@@ -61,10 +61,13 @@ void loop() {
   if (digitalRead(2) == LOW)
   {
     //włącznik jest nacisniety
+    j++;
+    digitalWrite(2, HIGH);
+    if(j>1)
+    {
     start = millis();
     czas = 0;
-    digitalWrite(2, HIGH);
-    Serial.println("HIGh ") ;
+    }
     delay(300);
   }
   else
@@ -72,7 +75,11 @@ void loop() {
     //włącznik jest zwolniony
     digitalWrite(2, LOW);
     delay(300);
+    j = 0;
   }
+//  czas = millis()-start;
+//  Serial.print("Czas: ");
+//  Serial.println(czas);
 
   // Receive Message
   if ( network.available() ) // Is there anything ready for us?
