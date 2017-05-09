@@ -95,37 +95,36 @@ void loop(void) {
   }
 
 
-  // SETTING LIGHT INTENSITY
-  if (Serial.available()) {
-    inString = Serial.readString();
-    Serial.print("String: ");
-    Serial.println(inString);
-    RF24NetworkHeader header(/*to node*/ other_node);
-    frame_t message;
-    if(inString[0] == 'G'){
-      message.header = 0; // get i lampla
-      
-    }else if(inString[0] == 'B'){
-    message.header = 1;
-    }
-    else{
-      message.header = 64;
-      message.value = 500;
-      Serial.print(message.value,DEC);
-    }
-    bool test = radio.testCarrier();
-    if(test){
-      Serial.println("CARRIER WAS");
-    }else{
-       Serial.println("NO CARRIER");
-    }
-    bool ok = network.write(header, &message, sizeof(message));
-    if (ok)
-      Serial.println("Sending payload OK.");
-    else
-      Serial.println("Sending payload FAILED.");
-    inString = "";
-  }
+  // SETTING LIGHT INTENSITY for debug
+//  if (Serial.available()) {
+//    inString = Serial.readString();
+//    Serial.print("String: ");
+//    Serial.println(inString);
+//    RF24NetworkHeader header(/*to node*/ other_node);
+//    frame_t message;
+//    if(inString[0] == 'G'){
+//      message.header = 0; // get i lampla
+//    }else if(inString[0] == 'B'){
+//    message.header = 1;
+//    }
+//    else{
+//      message.header = 64;
+//      message.value = 500;
+//      Serial.print(message.value,DEC);
+//    }
+//    bool test = radio.testCarrier();
+//    if(test){
+//      Serial.println("CARRIER WAS");
+//    }else{
+//       Serial.println("NO CARRIER");
+//    }
+//    bool ok = network.write(header, &message, sizeof(message));
+//    if (ok)
+//      Serial.println("Sending payload OK.");
+//    else
+//      Serial.println("Sending payload FAILED.");
+//    inString = "";
+//  }
 
 //  //ETHERNET PART
   int packetSize = Udp.parsePacket();
@@ -308,16 +307,22 @@ void loop(void) {
           {
             Serial.println("To jest lampa");
             resource_id = 0;
+            if(request_type == 1)
+            {
+              sendGetToObject(resource_id);
+            }
           }
           else if(strncmp(uri_path_option, "button",6) == 0)
           {
             Serial.println("To jest button");
             resource_id = 1;
+            sendGetToObject(resource_id);
           }
           else if(strncmp(uri_path_option, "radio",5) == 0)
           {
             Serial.println("To jest radio");
             resource_id = 2;
+            //TO_DO po stronie serwera
           }
           break;
         }
@@ -390,7 +395,7 @@ void loop(void) {
         {
           if(resource_id != 2)
           {
-            sendGetToObject(request_type, resource_id);
+            sendGetToObject(resource_id);
           }
           else
           {    sendToClient(resource_id);
@@ -401,10 +406,28 @@ void loop(void) {
   }
 }
 
-void sendGetToObject(int request_type, int resource_id)
+void sendGetToObject(int resource_id)
 {
   //function to send message to smart object
   Serial.println("sending message to object");
+  RF24NetworkHeader header(/*to node*/ other_node);
+  frame_t message;
+  if(resource_id == 0)
+  {
+    Serial.println("Sending GET LAMP");
+    message.header = 0;
+  }
+  else if(resource_id == 1)
+  {
+    Serial.println("Sending GET BUTTON");
+    message.header = 1;
+  }
+
+   bool ok = network.write(header, &message, sizeof(message));
+    if (ok)
+      Serial.println("Sending payload OK.");
+    else
+      Serial.println("Sending payload FAILED.");
 }
 
 void sendPutToObject(int request_type, int resource_id, byte)
