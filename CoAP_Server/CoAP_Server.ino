@@ -330,7 +330,6 @@ void loop(void) {
         {
           Serial.println("Uri-Path option");
           uri_path_option = (char*) malloc (opt_length);
-          char * body; 
           for(int i=0;i<opt_length;++i)
           {
             uri_path_option[i]=opt_value[i];
@@ -348,7 +347,6 @@ void loop(void) {
           else if(strncmp(uri_path_option, "button",6) == 0)
           {
             Serial.println("To jest button");
-            
             resource_id = 1;
             sendGetToObject(resource_id);
           }
@@ -357,17 +355,6 @@ void loop(void) {
             Serial.println("To jest radio");
             resource_id = 2;
             //TO_DO po stronie serwera
-          }
-          else if(strncmp(uri_path_option, ".well-known/core",16) ==0)
-          {
-            Serial.println("To jest .well-known/core");
-            body = "<button>;rt=\"button\";if=\"sensor\",<light>;rt=\"light\";/if=\"sensor\",<radio>;rt=\"radio\";if=\"sensor\"";
-            byte payload[strlen(body)];
-            for(int i = 0; i<strlen(body); ++i)
-            {
-              payload[i] = body[i];
-            }
-            
           }
           break;
         }
@@ -432,7 +419,7 @@ void loop(void) {
     {
       if(diagnostic_payload)
       {
-        //send diagnostic payload to client
+        sendDiagnosticPayload();
       }
       else
       {
@@ -486,3 +473,22 @@ void sendToClient(int resource_id)
   //function to send message to coap client
   Serial.println("sending message to client");
 }
+
+void sendDiagnosticPayload()
+{
+  //function to send to client diagnostic payload
+  int buffer_size = 4;
+  byte header[buffer_size];
+  //Ver: 01 NON: 01 TKL: 0000
+  header[0] = 01010000;
+  //Code: 5.01 - not implemented
+  header[1] = 10100001;
+  //MID: ab
+  header[2] = 97;
+  header[3] = 98;
+  
+  //send by udp
+  Serial.println("sending diagnostic payload to client");
+  Udp.write(header, buffer_size);
+}
+
