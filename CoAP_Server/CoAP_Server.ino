@@ -299,6 +299,7 @@ void loop(void) {
         {
           Serial.println("Uri-Path option");
           uri_path_option = (char*) malloc (opt_length);
+          char * body; 
           for(int i=0;i<opt_length;++i)
           {
             uri_path_option[i]=opt_value[i];
@@ -312,12 +313,24 @@ void loop(void) {
           else if(strncmp(uri_path_option, "button",6) == 0)
           {
             Serial.println("To jest button");
+            
             resource_id = 1;
           }
           else if(strncmp(uri_path_option, "radio",5) == 0)
           {
             Serial.println("To jest radio");
             resource_id = 2;
+          }
+          else if(strncmp(uri_path_option, ".well-known/core",16) ==0)
+          {
+            Serial.println("To jest .well-known/core");
+            body = "<button>;rt=\"button\";if=\"sensor\",<light>;rt=\"light\";/if=\"sensor\",<radio>;rt=\"radio\";if=\"sensor\"";
+            byte payload[strlen(body)];
+            for(int i = 0; i<strlen(body); ++i)
+            {
+              payload[i] = body[i];
+            }
+            
           }
           break;
         }
