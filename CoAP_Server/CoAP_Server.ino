@@ -267,21 +267,53 @@ void loop(void) {
     //loop until flag 11111111 that ends header
     while((packetBuffer[iter] != 255) && (packetBuffer[iter] != 0))
     {
-      Serial.println("debug2:");
-      //Serial.println(packetBuffer[iter], BIN);
       uint8_t opt_delta = packetBuffer[iter] >> 4;
-      //Serial.println(opt_delta, BIN);
+      Serial.println(opt_delta, BIN);
       uint8_t opt_length = packetBuffer[iter] & 15;
-     // Serial.println(opt_length, BIN);
-      byte opt_value[opt_length];
+      Serial.println(opt_length, BIN);
+
+      byte *opt_value;
+      if(opt_delta == 13)
+      {
+        //extended delta by 1B
+        ++iter;
+        option_no += packetBuffer[iter] - 13;
+      }
+      else if (opt_delta == 14)
+      {
+        //extended delta by 2B
+        ++iter;
+        int number = packetBuffer[iter] | packetBuffer[++iter] << 8;
+        option_no += number - 269;
+      }
+      else
+      {
+        option_no += opt_delta;
+      }
+
+      if(opt_length == 13)
+      {
+        //extended length by 1B
+        ++iter;
+        opt_value = (byte*) malloc (packetBuffer[iter] - 13);
+      }
+      else if (opt_length == 14)
+      {
+        //extended length by 2B
+        int number = packetBuffer[iter] | packetBuffer[++iter] << 8;
+        opt_value = (byte*) malloc (number - 269);
+      }
+      else
+      {
+        opt_value = (byte*) malloc (opt_length);
+      }
       for(int i = 0;i < opt_length; ++i)
       {
         ++iter;
         opt_value[i] = packetBuffer[iter];
         //Serial.println(opt_value[i], BIN);
       }
-      //TODO check whick option and do stuff
-      option_no += opt_delta;
+
       switch(option_no)
       {
         case 4:
