@@ -326,7 +326,7 @@ void loop(void) {
           }
           break;
         }
-        case 11:
+		case 11:
         {
           Serial.println("Uri-Path option");
           uri_path_option = (char*) malloc (opt_length);
