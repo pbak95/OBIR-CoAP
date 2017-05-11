@@ -413,6 +413,13 @@ void loop(void) {
         payload[j] = packetBuffer[iter + j];
         Serial.println(payload[j]);
       }
+
+      
+      //Sending put to LAMP
+      Serial.println("Method PUT");
+      int payloadSize = sizeof(payload) / sizeof(byte);
+      sendPutToObject(payload, payloadSize);
+      
     }
     //if flag=false do nothing, if flag=true send smth
     if(flag)
@@ -462,10 +469,30 @@ void sendGetToObject(int resource_id)
       Serial.println("Sending payload FAILED.");
 }
 
-void sendPutToObject(int request_type, int resource_id, byte)
+void sendPutToObject(byte payload[], int payloadSize)
 {
-  //function to send message to smart object
-  Serial.println("sending message to object");
+   //function to send message to smart object
+  Serial.println("sending message to object, payload size:");
+  Serial.println(payloadSize);
+  RF24NetworkHeader header(/*to node*/ other_node);
+  frame_t message;
+  message.header = 64;
+  for(int i=0; i< payloadSize; i++)
+  {
+    message.value = (payload[i] - 48) * pow(10, payloadSize -1 -i);
+  }
+
+  if(message.value > 1000)
+    message.value = 1000;
+  
+
+  Serial.println("Sending PUT lamp with value");
+  Serial.println(message.value, DEC);
+  bool ok = network.write(header, &message, sizeof(message));
+  if (ok)
+    Serial.println("Sending payload OK.");
+  else
+    Serial.println("Sending payload FAILED.");
 }
 
 void sendToClient(int resource_id)
