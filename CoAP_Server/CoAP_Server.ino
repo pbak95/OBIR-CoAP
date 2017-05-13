@@ -261,6 +261,7 @@ void loop(void) {
     byte options[MAX_BUFFER];
     char * uri_path_option;
     int resource_id;
+	  byte content_format_option;
 
     //number that indicates option
     uint8_t option_no = 0;
@@ -273,6 +274,7 @@ void loop(void) {
       Serial.println(opt_length, BIN);
 
       byte *opt_value;
+      byte *body;
       if(opt_delta == 13)
       {
         //extended delta by 1B
@@ -320,9 +322,12 @@ void loop(void) {
         {
           Serial.println("ETag option");
           byte etag_option[opt_length];
+		      Serial.print("ETag: ");
           for(int i=0;i<opt_length;++i)
           {
             etag_option[i]=opt_value[i];
+			      Serial.print(etag_option[i]);
+			      Serial.print(" , ");
           }
           break;
         }
@@ -356,26 +361,63 @@ void loop(void) {
             resource_id = 2;
             //TO_DO po stronie serwera
           }
-          break;
+          else if(strncmp(uri_path_option, ".well-known/core",16) ==0)
+          {
+            Serial.println("To jest .well-known/core");
+            body = "<button>;rt=\"button\";if=\"sensor\",<light>;rt=\"light\";/if=\"sensor\",<radio>;rt=\"radio\";if=\"sensor\"";
+            byte payload[strlen(body)];
+            for(int i = 0; i<strlen(body); ++i)
+            {
+              payload[i] = body[i];
+            }
+          }
+           break;
         }
         case 12:
         {
           Serial.println("Content-Format option");
-          byte content_format_option[opt_length];
-          for(int i=0;i<opt_length;++i)
-          {
-            content_format_option[i]=opt_value[i];
-          }
-          break;
+          content_format_option=opt_value[0];
+    		  Serial.print("Content-Format: ");
+    		  if(content_format_option == 0)
+    		  {
+    			  Serial.println("text/plain");
+    		  }
+    		  else if(content_format_option == 40)
+    		  {
+      			Serial.println("application/link-format");
+      			Serial.print("Tego nie obsługujemy");
+    		  }
+    		  else if(content_format_option == 41)
+    		  {
+      			Serial.println("application/xml");
+      			Serial.print("Tego nie obsługujemy");
+    		  }
+    		  else if(content_format_option == 42)
+    		  {
+      			Serial.println("application/octet-stream");
+      			Serial.print("Tego nie obsługujemy");
+    		  }
+    		  else if(content_format_option == 47)
+    		  {
+      			Serial.println("application/exi");
+      			Serial.print("Tego nie obsługujemy");
+    		  }
+    		  else if(content_format_option == 50)
+    		  {
+      			Serial.println("application/json");
+      			Serial.print("Tego nie obsługujemy");
+    		  }
+    		  break;
         }
         case 17:
         {
           Serial.println("Accept option");
-          byte acept_option[opt_length];
-          for(int i=0;i<opt_length;++i)
-          {
-            acept_option[i]=opt_value[i];
-          }
+          byte acept_option;
+          acept_option=opt_value[0];
+    		  if(acept_option == content_format_option)
+    			  Serial.println("Accept");
+    		  else
+    			  erial.println("Not Accept");
           break;
         }
         case 23:
