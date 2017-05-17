@@ -280,6 +280,9 @@ void loop(void) {
     //length of header without options
     uint8_t h_len_wo_opt = iter;
 
+    // .wellknown/core payload
+    byte *body;
+    
     //loop until flag 11111111 that ends header
     while((packetBuffer[iter] != 255) && (packetBuffer[iter] != 0))
     {
@@ -289,7 +292,6 @@ void loop(void) {
       Serial.println(opt_length, BIN);
 
       byte *opt_value;
-      byte *body;
       if(opt_delta == 13)
       {
         //extended delta by 1B
@@ -379,13 +381,8 @@ void loop(void) {
           {
             Serial.println(F("To jest .well-known/core"));
             body = "<button>;rt=\"button\";if=\"sensor\",<light>;rt=\"light\";/if=\"sensor\",<radio>;rt=\"radio\";if=\"sensor\"";
-            byte payload[strlen(body)];
             wellknownLength = strlen(body);
-            for(int i = 0; i<strlen(body); ++i)
-            {
-              payload[i] = body[i];
-            }
-            //TODO send to client payload jakas flage ustawic ze to wyslac
+            resource_id = 3;
           }
            break;
         }
@@ -497,7 +494,7 @@ void loop(void) {
       {
         if(uri_path_option == NULL)
         {
-          if(resource_id != 2)
+          if(resource_id < 2)
           {
             sendGetToObject(resource_id);
           }
@@ -539,11 +536,24 @@ void loop(void) {
             headerToSend[++it + TKL] = 81;
             headerToSend[++it + TKL] = wellknownLength;
 
-            //TODO skleic payload z radiem do wyslania
-            byte payloadToSend[1];
-            //TO REMOVE
-            payloadToSend[0] = 97;
-            sendToClient(headerToSend, payloadToSend);
+            if(resource_id == 2)
+            {
+              //send radio in payload
+              //TODO skleic payload z radiem do wyslania
+              byte payloadToSend[1];
+              //TO REMOVE
+              payloadToSend[0] = 97;
+              sendToClient(headerToSend, payloadToSend);
+            }
+            if(resource_id == 3)
+            {
+              //send specified block of .wellknown/core
+              //TODO check which fragment           
+              byte payloadToSend[SZX];
+              //TODO parse body
+              memcpy ( &payloadToSend, &body+(NUM*SZX), SZX );
+              sendToClient(headerToSend, payloadToSend);
+            }
           }
         }
       }
