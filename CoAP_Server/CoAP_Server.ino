@@ -45,22 +45,22 @@ void setup(void)
 {
   radio.begin();
   Serial.begin(115200);
-  Serial.println("Starting CoAP Server:");
-  Serial.println("Radio channel:");
+  Serial.println(F("Starting CoAP Server:"));
+  Serial.println(F("Radio channel:"));
   Serial.println(110, DEC);
-  Serial.println("Radio address:");
+  Serial.println(F("Radio address:"));
   Serial.println(this_node,OCT);
   SPI.begin();
   network.begin(/*channel*/ 110, /*node address*/ this_node);
  if (Ethernet.begin(mac) == 0) {
-    Serial.println("Failed to configure Ethernet using DHCP");
+    Serial.println(F("Failed to configure Ethernet using DHCP"));
     // no point in carrying on, so do nothing forevermore:
     for(;;)
       ;
   }
-  Serial.println("IP: ");
+  Serial.println(F("IP: "));
   Serial.println(Ethernet.localIP());
-  Serial.println("Port: 1238");
+  Serial.println(F("Port: 1238"));
   Udp.begin(localPort);
 
 }
@@ -75,19 +75,19 @@ void loop(void) {
     uint8_t operation = message.header >> 6;
     uint8_t resource = message.header & 63;
     if(resource == 0){
-     Serial.println("LIGHT"); 
+     Serial.println(F("LIGHT"));
      if(operation == 0){
-      Serial.println("GET");
-      Serial.println("Light intensity");
+      Serial.println(F("GET"));
+      Serial.println(F("Light intensity"));
       Serial.println(message.value);
      }else{
-      Serial.println("PUT");
-      Serial.println("Light intensity set");
+      Serial.println(F("PUT"));
+      Serial.println(F("Light intensity set"));
       Serial.println(message.value);
      }
     }else if(resource == 1){
-      Serial.println("BUTTON");
-      Serial.println("button state and time");
+      Serial.println(F("BUTTON"));
+      Serial.println(F("button state and time"));
       Serial.println(message.state);
       Serial.println(message.value);
     }
@@ -161,12 +161,12 @@ void loop(void) {
     uint8_t T = (packetBuffer[0] >> 4)& 3;
     if(T == 1)
     {
-      Serial.println("Type: NON");
+      Serial.println(F("Type: NON"));
       flag = true;
     }
     else
     {
-      Serial.println("Type: other");
+      Serial.println(F("Type: other"));
       flag = true;
       diagnostic_payload = true;
     }
@@ -174,7 +174,7 @@ void loop(void) {
     //field token length 0-255
     Serial.println(packetBuffer[0], BIN);
     uint8_t TKL = packetBuffer[0] & 15;
-    Serial.print("TKL: ");
+    Serial.print(F("TKL: "));
     Serial.println(TKL, BIN);
 
     //field code class request(0) success response(010) client error response(100) server error response(101)
@@ -183,9 +183,9 @@ void loop(void) {
     //field code detail empty(00000) GET(00001) POST(00010) PUT(00011) DELETE(00100) (dd) for response
     uint8_t code_detail = packetBuffer[1] & 31;
 
-    Serial.print("Code: ");
+    Serial.print(F("Code: "));
     Serial.print(code_class, DEC);
-    Serial.print(".");
+    Serial.print(F("."));
     Serial.println(code_detail, DEC);
 
     //type of request
@@ -199,18 +199,18 @@ void loop(void) {
        if(code_detail == 1)
        {
         //GET
-        Serial.println("GET request");
+        Serial.println(F("GET request"));
         request_type = 1;
        }
        else if(code_detail == 3)
        {
         //PUT
-        Serial.println("PUT request");
+        Serial.println(F("PUT request"));
         request_type = 3;
        }
        else
        {
-        Serial.println("Different request");
+        Serial.println(F("Different request"));
         diagnostic_payload = true;
        }
        break;
@@ -218,14 +218,14 @@ void loop(void) {
       case 2:
       {
         //success response
-        Serial.println("success response");
+        Serial.println(F("success response"));
         flag = false;
         break;
       }
       case 4:
       {
         //client error response
-        Serial.println("client error response");
+        Serial.println(F("client error response"));
         flag = true;
         diagnostic_payload = true;
         break;
@@ -233,7 +233,7 @@ void loop(void) {
       case 5:
       {
         //server error response
-        Serial.println("server error response");
+        Serial.println(F("server error response"));
         flag = true;
         diagnostic_payload = true;
         break;
@@ -259,7 +259,16 @@ void loop(void) {
 
     //until byte is not flag 11111111
     byte options[MAX_BUFFER];
+    //Uri-path for indicating the resource
     char * uri_path_option;
+    //the relative number of the block within a sequence of blocks
+    uint8_t NUM;
+    //whether more blocks are following
+    uint8_t M;
+    //the size of the block
+    uint8_t SZX;
+    //Size2 for indicating the size of the representation transferred in responses
+    byte * size2_option;
     int resource_id;
 	  byte content_format_option;
 
@@ -313,27 +322,26 @@ void loop(void) {
       {
         ++iter;
         opt_value[i] = packetBuffer[iter];
-        //Serial.println(opt_value[i], BIN);
       }
 
       switch(option_no)
       {
         case 4:
         {
-          Serial.println("ETag option");
+          Serial.println(F("ETag option"));
           byte etag_option[opt_length];
-		      Serial.print("ETag: ");
+		      Serial.print(F("ETag: "));
           for(int i=0;i<opt_length;++i)
           {
             etag_option[i]=opt_value[i];
 			      Serial.print(etag_option[i]);
-			      Serial.print(" , ");
+			      Serial.print(F(" , "));
           }
           break;
         }
 		case 11:
         {
-          Serial.println("Uri-Path option");
+          Serial.println(F("Uri-Path option"));
           uri_path_option = (char*) malloc (opt_length);
           for(int i=0;i<opt_length;++i)
           {
@@ -342,7 +350,7 @@ void loop(void) {
 
           if(strncmp(uri_path_option, "lamp",4) == 0)
           {
-            Serial.println("To jest lampa");
+            Serial.println(F("To jest lampa"));
             resource_id = 0;
             if(request_type == 1)
             {
@@ -351,19 +359,19 @@ void loop(void) {
           }
           else if(strncmp(uri_path_option, "button",6) == 0)
           {
-            Serial.println("To jest button");
+            Serial.println(F("To jest button"));
             resource_id = 1;
             sendGetToObject(resource_id);
           }
           else if(strncmp(uri_path_option, "radio",5) == 0)
           {
-            Serial.println("To jest radio");
+            Serial.println(F("To jest radio"));
             resource_id = 2;
             //TO_DO po stronie serwera
           }
           else if(strncmp(uri_path_option, ".well-known/core",16) ==0)
           {
-            Serial.println("To jest .well-known/core");
+            Serial.println(F("To jest .well-known/core"));
             body = "<button>;rt=\"button\";if=\"sensor\",<light>;rt=\"light\";/if=\"sensor\",<radio>;rt=\"radio\";if=\"sensor\"";
             byte payload[strlen(body)];
             for(int i = 0; i<strlen(body); ++i)
@@ -375,65 +383,73 @@ void loop(void) {
         }
         case 12:
         {
-          Serial.println("Content-Format option");
+          Serial.println(F("Content-Format option"));
           content_format_option=opt_value[0];
-    		  Serial.print("Content-Format: ");
-    		  if(content_format_option == 0)
+          Serial.print(F("Content-Format: "));
+          if(content_format_option == 0)
     		  {
-    			  Serial.println("text/plain");
+            Serial.println(F("text/plain"));
     		  }
     		  else if(content_format_option == 40)
     		  {
-      			Serial.println("application/link-format");
-      			Serial.print("Tego nie obsługujemy");
+            Serial.println(F("application/link-format"));
+            Serial.print(F("Tego nie obs�ugujemy"));
     		  }
     		  else if(content_format_option == 41)
     		  {
-      			Serial.println("application/xml");
-      			Serial.print("Tego nie obsługujemy");
+            Serial.println(F("application/xml"));
+            Serial.print(F("Tego nie obs�ugujemy"));
     		  }
     		  else if(content_format_option == 42)
     		  {
-      			Serial.println("application/octet-stream");
-      			Serial.print("Tego nie obsługujemy");
+            Serial.println(F("application/octet-stream"));
+            Serial.print(F("Tego nie obs�ugujemy"));
     		  }
     		  else if(content_format_option == 47)
     		  {
-      			Serial.println("application/exi");
-      			Serial.print("Tego nie obsługujemy");
+            Serial.println(F("application/exi"));
+            Serial.print(F("Tego nie obs�ugujemy"));
     		  }
     		  else if(content_format_option == 50)
     		  {
-      			Serial.println("application/json");
-      			Serial.print("Tego nie obsługujemy");
+            Serial.println(F("application/json"));
+            Serial.print(F("Tego nie obs�ugujemy"));
     		  }
     		  break;
         }
         case 17:
         {
-          Serial.println("Accept option");
+          Serial.println(F("Accept option"));
           byte acept_option;
           acept_option=opt_value[0];
     		  if(acept_option == content_format_option)
-    			  Serial.println("Accept");
+            Serial.println(F("Accept"));
     		  else
-    			  erial.println("Not Accept");
+            Serial.println(F("Not Accept"));
           break;
         }
         case 23:
         {
-          Serial.println("Block2 option");
+          Serial.println(F("Block2 option"));
           byte byte2_option[opt_length];
-          for(int i=0;i<opt_length;++i)
+          if(opt_length == 1)
           {
-            byte2_option[i]=opt_value[i];
+            NUM = byte2_option[0] >> 4;
+            M = (byte2_option[0] >> 3) & 1;
+            SZX = byte2_option[0] & 7;
+          }
+          else
+          {
+            //we assume taha there will bo no longer payload than 15blocks
+            Serial.println(F("Block2 too long"));
+            sendDiagnosticPayload();
           }
           break;
         }
         case 28:
         {
-          Serial.println("Size2 option");
-          byte size2_option[opt_length];
+          Serial.println(F("Size2 option"));
+          size2_option = (byte*) malloc (opt_length);
           for(int i=0;i<opt_length;++i)
           {
             size2_option[i]=opt_value[i];
@@ -458,7 +474,7 @@ void loop(void) {
 
       
       //Sending put to LAMP
-      Serial.println("Method PUT");
+      Serial.println(F("Method PUT"));
       int payloadSize = sizeof(payload) / sizeof(byte);
       sendPutToObject(payload, payloadSize);
       
@@ -479,7 +495,8 @@ void loop(void) {
             sendGetToObject(resource_id);
           }
           else
-          {    sendToClient(resource_id);
+          {
+            sendToClient(resource_id);
           }
         }
       }
@@ -490,31 +507,31 @@ void loop(void) {
 void sendGetToObject(int resource_id)
 {
   //function to send message to smart object
-  Serial.println("sending message to object");
+  Serial.println(F("sending message to object"));
   RF24NetworkHeader header(/*to node*/ other_node);
   frame_t message;
   if(resource_id == 0)
   {
-    Serial.println("Sending GET LAMP");
+    Serial.println(F("Sending GET LAMP"));
     message.header = 0;
   }
   else if(resource_id == 1)
   {
-    Serial.println("Sending GET BUTTON");
+    Serial.println(F("Sending GET BUTTON"));
     message.header = 1;
   }
 
    bool ok = network.write(header, &message, sizeof(message));
     if (ok)
-      Serial.println("Sending payload OK.");
+      Serial.println(F("Sending payload OK."));
     else
-      Serial.println("Sending payload FAILED.");
+      Serial.println(F("Sending payload FAILED."));
 }
 
 void sendPutToObject(byte payload[], int payloadSize)
 {
    //function to send message to smart object
-  Serial.println("sending message to object, payload size:");
+  Serial.println(F("sending message to object, payload size:"));
   Serial.println(payloadSize);
   RF24NetworkHeader header(/*to node*/ other_node);
   frame_t message;
@@ -528,19 +545,19 @@ void sendPutToObject(byte payload[], int payloadSize)
     message.value = 1000;
   
 
-  Serial.println("Sending PUT lamp with value");
+  Serial.println(F("Sending PUT lamp with value"));
   Serial.println(message.value, DEC);
   bool ok = network.write(header, &message, sizeof(message));
   if (ok)
-    Serial.println("Sending payload OK.");
+    Serial.println(F("Sending payload OK."));
   else
-    Serial.println("Sending payload FAILED.");
+    Serial.println(F("Sending payload FAILED."));
 }
 
 void sendToClient(int resource_id)
 {
   //function to send message to coap client
-  Serial.println("sending message to client");
+  Serial.println(F("sending message to client"));
 }
 
 void sendDiagnosticPayload()
@@ -557,7 +574,7 @@ void sendDiagnosticPayload()
   header[3] = 98;
   
   //send by udp
-  Serial.println("sending diagnostic payload to client");
+  Serial.println(F("sending diagnostic payload to client"));
   Udp.write(header, buffer_size);
 }
 
