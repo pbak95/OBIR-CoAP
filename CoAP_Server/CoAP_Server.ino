@@ -274,6 +274,12 @@ void loop(void) {
 
     //number that indicates option
     uint8_t option_no = 0;
+
+    //length of large resource
+    uint8_t wellknownLength = 0;
+    //length of header without options
+    uint8_t h_len_wo_opt = iter;
+
     //loop until flag 11111111 that ends header
     while((packetBuffer[iter] != 255) && (packetBuffer[iter] != 0))
     {
@@ -374,10 +380,12 @@ void loop(void) {
             Serial.println(F("To jest .well-known/core"));
             body = "<button>;rt=\"button\";if=\"sensor\",<light>;rt=\"light\";/if=\"sensor\",<radio>;rt=\"radio\";if=\"sensor\"";
             byte payload[strlen(body)];
+            wellknownLength = strlen(body);
             for(int i = 0; i<strlen(body); ++i)
             {
               payload[i] = body[i];
             }
+            //TODO send to client payload jakas flage ustawic ze to wyslac
           }
            break;
         }
@@ -420,9 +428,9 @@ void loop(void) {
         case 17:
         {
           Serial.println(F("Accept option"));
-          byte acept_option;
-          acept_option=opt_value[0];
-    		  if(acept_option == content_format_option)
+          byte accept_option;
+          accept_option=opt_value[0];
+          if(accept_option == content_format_option)
             Serial.println(F("Accept"));
     		  else
             Serial.println(F("Not Accept"));
@@ -440,7 +448,7 @@ void loop(void) {
           }
           else
           {
-            //we assume taha there will bo no longer payload than 15blocks
+            //we assume that there will bo no longer payload than 15 blocks
             Serial.println(F("Block2 too long"));
             sendDiagnosticPayload();
           }
@@ -471,7 +479,6 @@ void loop(void) {
         payload[j] = packetBuffer[iter + j];
         Serial.println(payload[j]);
       }
-
       
       //Sending put to LAMP
       Serial.println(F("Method PUT"));
@@ -496,7 +503,47 @@ void loop(void) {
           }
           else
           {
-            sendToClient(resource_id);
+            //send radio resource to client
+            byte headerToSend[h_len_wo_opt+6];
+            int it=0;
+            headerToSend[it] = packetBuffer[0];
+            //Code 2.05 OK 01000101
+            headerToSend[++it] = 69;
+            //MID ab
+            headerToSend[++it] = 97;
+            headerToSend[++it] = 98;
+            //if exists copy token with TKL Bytes
+            if(TKL != 0)
+            {
+              memcpy ( &headerToSend+4, &packetBuffer+4, TKL );
+            }
+            //TODO options
+            //Content Format delta 12 length 1 -> 193
+            headerToSend[++it + TKL] = 193;
+            if(content_format_option == 50)
+            {
+              //content-format = 40
+              headerToSend[++it + TKL] = 40;
+            }
+            else
+            {
+              //content-format = 0
+              headerToSend[++it + TKL] = 40;
+            }
+            //Block2 delta 11 length 1 -> 177
+            headerToSend[++it + TKL] = 177;
+            //TODO check if M=0 or M=1 if is another packet to send
+            headerToSend[++it + TKL] = NUM | M | SZX;
+
+            //Size2 delta 5 length 1?
+            headerToSend[++it + TKL] = 81;
+            headerToSend[++it + TKL] = wellknownLength;
+
+            //TODO skleic payload z radiem do wyslania
+            byte payloadToSend[1];
+            //TO REMOVE
+            payloadToSend[0] = 97;
+            sendToClient(headerToSend, payloadToSend);
           }
         }
       }
@@ -554,10 +601,19 @@ void sendPutToObject(byte payload[], int payloadSize)
     Serial.println(F("Sending payload FAILED."));
 }
 
-void sendToClient(int resource_id)
+void sendToClient(byte header[], byte payload[])
 {
   //function to send message to coap client
+  //packet size header + flag + payload
+  uint8_t flag = 255;
+  byte packet[(sizeof(header)/sizeof(header[0])) + 1 + (sizeof(payload)/sizeof(payload[0]))];
+
+  //fill packet array with function arguments
+  memcpy ( &packet, &header, sizeof(header) );
+  memcpy ( &packet+sizeof(header), &flag, sizeof(flag) );
+  memcpy ( &packet+sizeof(header)+sizeof(flag), &payload, sizeof(payload) );
   Serial.println(F("sending message to client"));
+  Udp.write(packet, sizeof(packet));
 }
 
 void sendDiagnosticPayload()
