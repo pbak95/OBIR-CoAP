@@ -31,7 +31,8 @@ struct frame_t {
 
 uint8_t id;
 byte* coap_header;
-bool received = false;
+int fragmentation_size = 64;
+bool payload_sended = false;
 
 //ETHERNET PART
 byte mac[] = {0x00, 0xaa, 0xbb, 0xcc, 0xde, 0xf4}; //MAC address of ehernet shield
@@ -40,7 +41,6 @@ byte packetBuffer[MAX_BUFFER];
 byte sendBuffer[MAX_BUFFER];
 EthernetUDP Udp;    //initializing UDP object
 short localPort = 1238;   //UDP port  
-
 
 //SERIAL
 String inString = "";
@@ -85,7 +85,7 @@ void loop(void) {
       Serial.println(F("Light intensity"));
       Serial.println(message.value);
       //send to client message.value
-      sendToClient(coap_header, message.value);
+      sendToClient(coap_header,sizeof(coap_header), message.value, sizeof(message.value));
      }
 //     else{
 //      Serial.println(F("PUT"));
@@ -98,42 +98,10 @@ void loop(void) {
       Serial.println(message.state);
       Serial.println(message.value);
       //send to client message.value
-      sendToClient(coap_header, message.value);
+      sendToClient(coap_header,sizeof(coap_header), message.value,sizeof(message.value));
     }
    
   }
-
-
-  // SETTING LIGHT INTENSITY for debug
-//  if (Serial.available()) {
-//    inString = Serial.readString();
-//    Serial.print("String: ");
-//    Serial.println(inString);
-//    RF24NetworkHeader header(/*to node*/ other_node);
-//    frame_t message;
-//    if(inString[0] == 'G'){
-//      message.header = 0; // get i lampla
-//    }else if(inString[0] == 'B'){
-//    message.header = 1;
-//    }
-//    else{
-//      message.header = 64;
-//      message.value = 500;
-//      Serial.print(message.value,DEC);
-//    }
-//    bool test = radio.testCarrier();
-//    if(test){
-//      Serial.println("CARRIER WAS");
-//    }else{
-//       Serial.println("NO CARRIER");
-//    }
-//    bool ok = network.write(header, &message, sizeof(message));
-//    if (ok)
-//      Serial.println("Sending payload OK.");
-//    else
-//      Serial.println("Sending payload FAILED.");
-//    inString = "";
-//  }
 
 //  //ETHERNET PART
   int packetSize = Udp.parsePacket();
@@ -156,8 +124,8 @@ void loop(void) {
 //
     //flag to indicate if coap field is handled
     bool flag = false;
-    //flag to send back to client diagnostic payload
-    bool diagnostic_payload = false;
+    //flag to indicate diagnostic payload
+    bool payload_sended = false;
 
     //header is first 4B of coap message
     int header_length = 4;
@@ -177,7 +145,8 @@ void loop(void) {
     {
       Serial.println(F("Type: other"));
       flag = true;
-      diagnostic_payload = true;
+      sendDiagnosticPayload();
+      payload_sended = true;
     }
 
     //field token length 0-255
@@ -220,7 +189,8 @@ void loop(void) {
        else
        {
         Serial.println(F("Different request"));
-        diagnostic_payload = true;
+        sendDiagnosticPayload();
+        payload_sended = true;
        }
        break;
       }
@@ -236,7 +206,8 @@ void loop(void) {
         //client error response
         Serial.println(F("client error response"));
         flag = true;
-        diagnostic_payload = true;
+        sendDiagnosticPayload();
+        payload_sended = true;
         break;
       }
       case 5:
@@ -244,22 +215,26 @@ void loop(void) {
         //server error response
         Serial.println(F("server error response"));
         flag = true;
-        diagnostic_payload = true;
+        sendDiagnosticPayload();
+        payload_sended = true;
         break;
       }
     }
 
     //field messageID
     uint16_t MessageID = ((uint16_t)packetBuffer[2] << 8) | packetBuffer[3];
+    Serial.print(F("MessageID: "));
     Serial.println(MessageID, DEC);
 
     //if exists read token with TKL Bytes
     if(TKL != 0)
     {
       byte token[TKL];
+      Serial.println(F("Token: "));
       for(int i=0; i< TKL; ++i)
       {
         token[i] = packetBuffer[i + header_length];
+        Serial.println(token[i]);
       }
     }
 
@@ -291,14 +266,14 @@ void loop(void) {
 
     // .wellknown/core payload
     byte *body;
-    
+    //wellknown/core flag
+    bool wellknownflag = false;
+              
     //loop until flag 11111111 that ends header
     while((packetBuffer[iter] != 255) && (packetBuffer[iter] != 0))
     {
       uint8_t opt_delta = packetBuffer[iter] >> 4;
-      Serial.println(opt_delta, BIN);
       uint8_t opt_length = packetBuffer[iter] & 15;
-      Serial.println(opt_length, BIN);
 
       byte *opt_value;
       if(opt_delta == 13)
@@ -335,6 +310,12 @@ void loop(void) {
       {
         opt_value = (byte*) malloc (opt_length);
       }
+      
+      Serial.println(F("delta: "));
+      Serial.println(opt_delta, BIN);
+      Serial.println(F("length: "));
+      Serial.println(opt_length, BIN);
+      
       for(int i = 0;i < opt_length; ++i)
       {
         ++iter;
@@ -347,12 +328,11 @@ void loop(void) {
         {
           Serial.println(F("ETag option"));
           byte etag_option[opt_length];
-		      Serial.print(F("ETag: "));
+		      Serial.println(F("ETag: "));
           for(int i=0;i<opt_length;++i)
           {
             etag_option[i]=opt_value[i];
-			      Serial.print(etag_option[i]);
-			      Serial.print(F(" , "));
+			      Serial.println(etag_option[i]);
           }
           break;
         }
@@ -363,6 +343,7 @@ void loop(void) {
           for(int i=0;i<opt_length;++i)
           {
             uri_path_option[i]=opt_value[i];
+            Serial.println(uri_path_option[i]);
           }
 
           if(strncmp(uri_path_option, "lamp",4) == 0)
@@ -378,20 +359,23 @@ void loop(void) {
           {
             Serial.println(F("To jest button"));
             resource_id = 1;
-            sendGetToObject(resource_id);
+            //sendGetToObject(resource_id);
           }
           else if(strncmp(uri_path_option, "radio",5) == 0)
           {
             Serial.println(F("To jest radio"));
             resource_id = 2;
-            //TO_DO po stronie serwera
           }
-          else if(strncmp(uri_path_option, ".well-known/core",16) ==0)
+          else if(strncmp(uri_path_option, ".well-known",11) == 0)
+          {
+            wellknownflag = true;
+          }
+          else if(strncmp(uri_path_option, "core",4) == 0 && wellknownflag == true)
           {
             Serial.println(F("To jest .well-known/core"));
             body = "<button>;rt=\"button\";if=\"sensor\",<light>;rt=\"light\";/if=\"sensor\",<radio>;rt=\"radio\";if=\"sensor\"";
             wellknownLength = strlen(body);
-            resource_id = 3;
+            resource_id = 3;            
           }
            break;
         }
@@ -399,7 +383,7 @@ void loop(void) {
         {
           Serial.println(F("Content-Format option"));
           content_format_option=opt_value[0];
-          Serial.print(F("Content-Format: "));
+          Serial.println(F("Content-Format: "));
           if(content_format_option == 0)
     		  {
             Serial.println(F("text/plain"));
@@ -407,27 +391,27 @@ void loop(void) {
     		  else if(content_format_option == 40)
     		  {
             Serial.println(F("application/link-format"));
-            Serial.print(F("Tego nie obs�ugujemy"));
+            Serial.println(F("Tego nie obs�ugujemy"));
     		  }
     		  else if(content_format_option == 41)
     		  {
             Serial.println(F("application/xml"));
-            Serial.print(F("Tego nie obs�ugujemy"));
+            Serial.println(F("Tego nie obs�ugujemy"));
     		  }
     		  else if(content_format_option == 42)
     		  {
             Serial.println(F("application/octet-stream"));
-            Serial.print(F("Tego nie obs�ugujemy"));
+            Serial.println(F("Tego nie obs�ugujemy"));
     		  }
     		  else if(content_format_option == 47)
     		  {
             Serial.println(F("application/exi"));
-            Serial.print(F("Tego nie obs�ugujemy"));
+            Serial.println(F("Tego nie obs�ugujemy"));
     		  }
     		  else if(content_format_option == 50)
     		  {
             Serial.println(F("application/json"));
-            Serial.print(F("Tego nie obs�ugujemy"));
+            Serial.println(F("Tego nie obs�ugujemy"));
     		  }
     		  break;
         }
@@ -448,15 +432,24 @@ void loop(void) {
           byte byte2_option[opt_length];
           if(opt_length == 1)
           {
+            Serial.println(byte2_option[0],BIN);
             NUM = byte2_option[0] >> 4;
             M = (byte2_option[0] >> 3) & 1;
             SZX = byte2_option[0] & 7;
+            fragmentation_size = pow(2,SZX+4);
+            Serial.println(F("Number: "));
+            Serial.println(NUM);
+            Serial.println(F("If-next: "));
+            Serial.println(M,BIN);
+            Serial.println(F("Fragmentation size: "));
+            Serial.println(fragmentation_size, DEC);
           }
           else
           {
             //we assume that there will bo no longer payload than 15 blocks
             Serial.println(F("Block2 too long"));
             sendDiagnosticPayload();
+            payload_sended = true;
           }
           break;
         }
@@ -475,6 +468,7 @@ void loop(void) {
     }
     //length of header with options
     uint8_t h_len_w_opt = iter;
+    
     if(packetBuffer[iter] != 0)
     {
       ++iter;
@@ -485,23 +479,21 @@ void loop(void) {
         payload[j] = packetBuffer[iter + j];
         Serial.println(payload[j]);
       }
-      
-      //Sending put to LAMP
-      Serial.println(F("Method PUT"));
-      int payloadSize = sizeof(payload) / sizeof(byte);
-      sendPutToObject(payload, payloadSize);
-      
+
+      if(!payload_sended)
+      {
+        //Sending put to LAMP
+        Serial.println(F("Method PUT"));
+        int payloadSize = sizeof(payload) / sizeof(byte);
+        sendPutToObject(payload, payloadSize); 
+      }   
     }
     //if flag=false do nothing, if flag=true send smth
     if(flag)
     {
-      if(diagnostic_payload)
+      if(payload_sended == false)
       {
-        sendDiagnosticPayload();
-      }
-      else
-      {
-        if(uri_path_option == NULL)
+        if(uri_path_option != NULL)
         {
           byte headerToSend[h_len_wo_opt+6];
           int it=0;
@@ -516,9 +508,10 @@ void loop(void) {
           {
             memcpy ( &headerToSend+4, &packetBuffer+4, TKL );
           }
-
+          
           //Content Format delta 12 length 1 -> 193
           headerToSend[++it + TKL] = 193;
+
           if(content_format_option == 50)
           {
             //content-format = 40
@@ -527,24 +520,24 @@ void loop(void) {
           else
           {
             //content-format = 0
-            headerToSend[++it + TKL] = 40;
+            headerToSend[++it + TKL] = 0;
           }
           //Block2 delta 11 length 1 -> 177
           headerToSend[++it + TKL] = 177;
           if(resource_id != 3)
           {
-            headerToSend[++it + TKL] = NUM | M | SZX;
+            headerToSend[++it + TKL] = SZX | M <<3 | NUM << 6;
           }
           else
           {
             //TODO check if M=0 or M=1 if is another packet to send
+            //TO CHANGE M value
+            headerToSend[++it + TKL] = NUM | M | SZX;
           }
-          
-          //debug println
-          Serial.println(headerToSend[it + TKL],BIN);
 
           //Size2 delta 5 length 1?
           headerToSend[++it + TKL] = 81;
+          
           if(resource_id == 3)
           { 
             headerToSend[++it + TKL] = wellknownLength;
@@ -577,19 +570,28 @@ void loop(void) {
           {
             //send radio in payload
             //TODO skleic payload z radiem do wyslania
-            byte payloadToSend[1];
+            byte payloadToSend[9];
             //TO REMOVE
             payloadToSend[0] = 97;
-            sendToClient(headerToSend, payloadToSend);
+            payloadToSend[1] = 97;
+            payloadToSend[2] = 97;
+            payloadToSend[3] = 97;
+            payloadToSend[4] = 97;
+            payloadToSend[5] = 97;
+            payloadToSend[6] = 97;
+            payloadToSend[7] = 97;
+            payloadToSend[8] = 97;
+            sendToClient(headerToSend, sizeof(headerToSend), payloadToSend, sizeof(payloadToSend));
           }
           if(resource_id == 3)
           {
             //send specified block of .wellknown/core
-            //TODO check which fragment NUM         
+            //TODO check which fragment NUM    
+            Serial.println(F("debug"));     
             byte payloadToSend[SZX];
             //TODO parse body
             memcpy ( &payloadToSend, &body+(NUM*SZX), SZX );
-            sendToClient(headerToSend, payloadToSend);
+            sendToClient(headerToSend, sizeof(headerToSend), payloadToSend, sizeof(payloadToSend));
           }
         }
       }
@@ -647,19 +649,32 @@ void sendPutToObject(byte payload[], int payloadSize)
     Serial.println(F("Sending payload FAILED."));
 }
 
-void sendToClient(byte header[], byte payload[])
+void sendToClient(byte *header,int header_size, byte *payload, int payload_size)
 {
   //function to send message to coap client
   //packet size header + flag + payload
-  uint8_t flag = 255;
-  byte packet[(sizeof(header)/sizeof(header[0])) + 1 + (sizeof(payload)/sizeof(payload[0]))];
+  byte packet[header_size + 1 + payload_size];
 
   //fill packet array with function arguments
-  memcpy ( &packet, &header, sizeof(header) );
-  memcpy ( &packet+sizeof(header), &flag, sizeof(flag) );
-  memcpy ( &packet+sizeof(header)+sizeof(flag), &payload, sizeof(payload) );
+  memcpy ( &packet, header, header_size );  
+  packet[header_size]= 255;
+  int it=0;
+  for(int i=header_size+1;i<sizeof(packet)/sizeof(packet[0]);++i)
+  {
+    packet[i]= payload[it];
+    ++it;
+  }
+
+  Serial.println(F("message"));
+  for(int i=0;i<sizeof(packet)/sizeof(packet[0]);++i)
+  {
+    Serial.println(packet[i],BIN);
+  }
   Serial.println(F("sending message to client"));
-  Udp.write(packet, sizeof(packet));
+  Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+  int r=Udp.write(packet, sizeof(packet));
+  Serial.println(r);
+  Udp.endPacket();
 }
 
 void sendDiagnosticPayload()
