@@ -29,6 +29,10 @@ struct frame_t {
   uint32_t value;
 };
 
+uint8_t id;
+byte* coap_header;
+bool received = false;
+
 //ETHERNET PART
 byte mac[] = {0x00, 0xaa, 0xbb, 0xcc, 0xde, 0xf4}; //MAC address of ehernet shield
 const int MAX_BUFFER = 80;
@@ -80,16 +84,21 @@ void loop(void) {
       Serial.println(F("GET"));
       Serial.println(F("Light intensity"));
       Serial.println(message.value);
-     }else{
-      Serial.println(F("PUT"));
-      Serial.println(F("Light intensity set"));
-      Serial.println(message.value);
+      //send to client message.value
+      sendToClient(coap_header, message.value);
      }
+//     else{
+//      Serial.println(F("PUT"));
+//      Serial.println(F("Light intensity set"));
+//      Serial.println(message.value);
+//     }
     }else if(resource == 1){
       Serial.println(F("BUTTON"));
       Serial.println(F("button state and time"));
       Serial.println(message.state);
       Serial.println(message.value);
+      //send to client message.value
+      sendToClient(coap_header, message.value);
     }
    
   }
@@ -464,10 +473,10 @@ void loop(void) {
       }
       ++iter;
     }
+    //length of header with options
+    uint8_t h_len_w_opt = iter;
     if(packetBuffer[iter] != 0)
     {
-        
-    
       ++iter;
       //rest is payload
       byte payload[packetSize - iter];
@@ -494,66 +503,93 @@ void loop(void) {
       {
         if(uri_path_option == NULL)
         {
-          if(resource_id < 2)
+          byte headerToSend[h_len_wo_opt+6];
+          int it=0;
+          headerToSend[it] = packetBuffer[0];
+          //Code 2.05 OK 01000101
+          headerToSend[++it] = 69;
+          //MID ab
+          headerToSend[++it] = 97;
+          headerToSend[++it] = 98;
+          //if exists copy token with TKL Bytes
+          if(TKL != 0)
           {
-            sendGetToObject(resource_id);
+            memcpy ( &headerToSend+4, &packetBuffer+4, TKL );
+          }
+
+          //Content Format delta 12 length 1 -> 193
+          headerToSend[++it + TKL] = 193;
+          if(content_format_option == 50)
+          {
+            //content-format = 40
+            headerToSend[++it + TKL] = 40;
           }
           else
           {
-            //send radio resource to client
-            byte headerToSend[h_len_wo_opt+6];
-            int it=0;
-            headerToSend[it] = packetBuffer[0];
-            //Code 2.05 OK 01000101
-            headerToSend[++it] = 69;
-            //MID ab
-            headerToSend[++it] = 97;
-            headerToSend[++it] = 98;
-            //if exists copy token with TKL Bytes
-            if(TKL != 0)
-            {
-              memcpy ( &headerToSend+4, &packetBuffer+4, TKL );
-            }
-            //TODO options
-            //Content Format delta 12 length 1 -> 193
-            headerToSend[++it + TKL] = 193;
-            if(content_format_option == 50)
-            {
-              //content-format = 40
-              headerToSend[++it + TKL] = 40;
-            }
-            else
-            {
-              //content-format = 0
-              headerToSend[++it + TKL] = 40;
-            }
-            //Block2 delta 11 length 1 -> 177
-            headerToSend[++it + TKL] = 177;
-            //TODO check if M=0 or M=1 if is another packet to send
+            //content-format = 0
+            headerToSend[++it + TKL] = 40;
+          }
+          //Block2 delta 11 length 1 -> 177
+          headerToSend[++it + TKL] = 177;
+          if(resource_id != 3)
+          {
             headerToSend[++it + TKL] = NUM | M | SZX;
+          }
+          else
+          {
+            //TODO check if M=0 or M=1 if is another packet to send
+          }
+          
+          //debug println
+          Serial.println(headerToSend[it + TKL],BIN);
 
-            //Size2 delta 5 length 1?
-            headerToSend[++it + TKL] = 81;
+          //Size2 delta 5 length 1?
+          headerToSend[++it + TKL] = 81;
+          if(resource_id == 3)
+          { 
             headerToSend[++it + TKL] = wellknownLength;
-
-            if(resource_id == 2)
-            {
-              //send radio in payload
-              //TODO skleic payload z radiem do wyslania
-              byte payloadToSend[1];
-              //TO REMOVE
-              payloadToSend[0] = 97;
-              sendToClient(headerToSend, payloadToSend);
-            }
-            if(resource_id == 3)
-            {
-              //send specified block of .wellknown/core
-              //TODO check which fragment           
-              byte payloadToSend[SZX];
-              //TODO parse body
-              memcpy ( &payloadToSend, &body+(NUM*SZX), SZX );
-              sendToClient(headerToSend, payloadToSend);
-            }
+          }
+          if(resource_id == 2)
+          {
+            //TO REMOVE
+            uint8_t radioLength = 55;
+            headerToSend[++it + TKL] = radioLength;
+          }
+          if(resource_id == 1)
+          {
+            //TO REMOVE
+            uint8_t buttonLength = 55;
+            headerToSend[++it + TKL] = buttonLength;
+          }
+          if(resource_id == 0)
+          {
+            //TO REMOVE
+            uint8_t lampLength = 55;
+            headerToSend[++it + TKL] = lampLength;
+          }
+          
+          if(resource_id < 2)
+          {
+            memcpy ( &coap_header, &headerToSend, sizeof(headerToSend) ); 
+            sendGetToObject(resource_id);
+          }
+          if(resource_id == 2)
+          {
+            //send radio in payload
+            //TODO skleic payload z radiem do wyslania
+            byte payloadToSend[1];
+            //TO REMOVE
+            payloadToSend[0] = 97;
+            sendToClient(headerToSend, payloadToSend);
+          }
+          if(resource_id == 3)
+          {
+            //send specified block of .wellknown/core
+            //TODO check which fragment NUM         
+            byte payloadToSend[SZX];
+            //TODO parse body
+            memcpy ( &payloadToSend, &body+(NUM*SZX), SZX );
+            sendToClient(headerToSend, payloadToSend);
           }
         }
       }
