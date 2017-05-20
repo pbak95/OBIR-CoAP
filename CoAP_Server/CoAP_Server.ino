@@ -436,7 +436,7 @@ void loop(void) {
             NUM = byte2_option[0] >> 4;
             M = (byte2_option[0] >> 3) & 1;
             SZX = byte2_option[0] & 7;
-            fragmentation_size = pow(2,SZX+4);
+            fragmentation_size = pow(2,SZX+4) + 1;
             Serial.println(F("Number: "));
             Serial.println(NUM);
             Serial.println(F("If-next: "));
@@ -530,9 +530,15 @@ void loop(void) {
           }
           else
           {
-            //TODO check if M=0 or M=1 if is another packet to send
-            //TO CHANGE M value
-            headerToSend[++it + TKL] = NUM | M | SZX;
+            if((NUM + 1) * fragmentation_size >= wellknownLength)
+            {
+              M = 0;
+            }
+            else
+            {
+              M = 1;
+            }
+            headerToSend[++it + TKL] = SZX | M <<3 | NUM << 6;
           }
 
           //Size2 delta 5 length 1?
@@ -588,9 +594,11 @@ void loop(void) {
             //send specified block of .wellknown/core
             //TODO check which fragment NUM    
             Serial.println(F("debug"));     
-            byte payloadToSend[SZX];
-            //TODO parse body
-            memcpy ( &payloadToSend, &body+(NUM*SZX), SZX );
+            byte payloadToSend[fragmentation_size];
+            for(int i=0;i<fragmentation_size;++i)
+            {
+              payloadToSend[i] = body[NUM*fragmentation_size + i];
+            }
             sendToClient(headerToSend, sizeof(headerToSend), payloadToSend, sizeof(payloadToSend));
           }
         }
