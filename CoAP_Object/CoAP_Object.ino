@@ -32,10 +32,8 @@ void setup() {
   network.begin(110, this_node); // 110 - wspĂłlny kanaĹ‚, 1 - identyfikator swojego wezĹ‚a
   pinMode(2, INPUT); // przycisk monostabilny
   pinMode(3, OUTPUT); // lampka
-  Serial.println("jest ok ");
-  Serial.println(255 - default_light_state * 255 / 1000);
-  Serial.println("jest ok ");
-  Serial.println(255 - default_light_state * 255 / 1000);
+  //Serial.println("jest ok ");
+  //Serial.println(255 - default_light_state * 255 / 1000);
 }
 
 void loop() {
@@ -48,7 +46,7 @@ void loop() {
     tab[i] = tab[i] - 48;
     zmiennak += tab[i] * pow(10, (3 - i));
     default_light_state = zmiennak;
-    Serial.println(zmiennak);
+    //Serial.println(zmiennak);
     if (i == 3)
     {
       default_light_state++;

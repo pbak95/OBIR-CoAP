@@ -30,7 +30,9 @@ struct frame_t {
 };
 
 uint8_t id;
-byte* coap_header;
+uint16_t MID_counter = 0;
+byte* coap_header = {};
+uint8_t coap_header_size = 0;
 int fragmentation_size = 64;
 bool payload_sended = false;
 
@@ -70,7 +72,7 @@ void setup(void)
 }
 void loop(void) {
   network.update();                  // Checking the network regularly
-
+  
 //MESSAGE FROM SMART OBJECT
   while (network.available() ) {     // Checking if any data is avaliable
     RF24NetworkHeader header;        // header struct, which is send with each message
@@ -85,7 +87,7 @@ void loop(void) {
       Serial.println(F("Light intensity"));
       Serial.println(message.value);
       //send to client message.value
-      sendToClient(coap_header,sizeof(coap_header), message.value, sizeof(message.value));
+      sendToClient(coap_header,coap_header_size, message.value, sizeof(message.value));
      }
 //     else{
 //      Serial.println(F("PUT"));
@@ -97,8 +99,14 @@ void loop(void) {
       Serial.println(F("button state and time"));
       Serial.println(message.state);
       Serial.println(message.value);
+      byte temp[sizeof(message.state)+sizeof(message.value)];
+      temp[0] = message.state;
+      temp[1] = message.value >> 24;
+      temp[2] = message.value >> 16 ;
+      temp[3] = message.value >> 8 ;
+      temp[4] = message.value;
       //send to client message.value
-      sendToClient(coap_header,sizeof(coap_header), message.value,sizeof(message.value));
+      sendToClient(coap_header,coap_header_size, temp ,sizeof(temp));
     }
    
   }
@@ -145,8 +153,10 @@ void loop(void) {
     {
       Serial.println(F("Type: other"));
       flag = true;
-      sendDiagnosticPayload();
       payload_sended = true;
+      sendDiagnosticPayload();
+      return;
+      
     }
 
     //field token length 0-255
@@ -272,18 +282,22 @@ void loop(void) {
     //loop until flag 11111111 that ends header
     while((packetBuffer[iter] != 255) && (packetBuffer[iter] != 0))
     {
+      Serial.print("Iter = ");
+      Serial.println(iter);
       uint8_t opt_delta = packetBuffer[iter] >> 4;
       uint8_t opt_length = packetBuffer[iter] & 15;
 
       byte *opt_value;
       if(opt_delta == 13)
       {
+        Serial.println("opt_delta=13");
         //extended delta by 1B
         ++iter;
         option_no += packetBuffer[iter] - 13;
       }
       else if (opt_delta == 14)
       {
+        Serial.println("opt_delta=14");
         //extended delta by 2B
         ++iter;
         int number = packetBuffer[iter] | packetBuffer[++iter] << 8;
@@ -297,12 +311,14 @@ void loop(void) {
       if(opt_length == 13)
       {
         //extended length by 1B
+        Serial.println("opt_length=13");
         ++iter;
         opt_value = (byte*) malloc (packetBuffer[iter] - 13);
       }
       else if (opt_length == 14)
       {
         //extended length by 2B
+        Serial.println("opt_length=14");
         int number = packetBuffer[iter] | packetBuffer[++iter] << 8;
         opt_value = (byte*) malloc (number - 269);
       }
@@ -355,7 +371,8 @@ void loop(void) {
               sendGetToObject(resource_id);
             }
           }
-          else if(strncmp(uri_path_option, "button",6) == 0)
+          else if(strncmp(uri_path_option, "button",6) == 
+          0)
           {
             Serial.println(F("To jest button"));
             resource_id = 1;
@@ -366,14 +383,14 @@ void loop(void) {
             Serial.println(F("To jest radio"));
             resource_id = 2;
           }
-          else if(strncmp(uri_path_option, ".well-known",11) == 0)
+          else if(strncmp(uri_path_option, ".well-known/core",11) == 0)
           {
             wellknownflag = true;
           }
           else if(strncmp(uri_path_option, "core",4) == 0 && wellknownflag == true)
           {
             Serial.println(F("To jest .well-known/core"));
-            body = "<button>;rt=\"button\";if=\"sensor\",<light>;rt=\"light\";/if=\"sensor\",<radio>;rt=\"radio\";if=\"sensor\"";
+            body = "<button>;rt=\"button\";if=\"sensor\",<light>;rt=\"light\";if=\"sensor\",<radio>;rt=\"radio\";if=\"sensor\"";
             wellknownLength = strlen(body);
             resource_id = 3;            
           }
@@ -383,7 +400,8 @@ void loop(void) {
         {
           Serial.println(F("Content-Format option"));
           content_format_option=opt_value[0];
-          Serial.println(F("Content-Format: "));
+          Serial.print(F("Content-Format: "));
+          Serial.println(opt_value[0],DEC);
           if(content_format_option == 0)
     		  {
             Serial.println(F("text/plain"));
@@ -391,27 +409,27 @@ void loop(void) {
     		  else if(content_format_option == 40)
     		  {
             Serial.println(F("application/link-format"));
-            Serial.println(F("Tego nie obs�ugujemy"));
+            Serial.println(F("Tego nie obsĹ‚ugujemy"));
     		  }
     		  else if(content_format_option == 41)
     		  {
             Serial.println(F("application/xml"));
-            Serial.println(F("Tego nie obs�ugujemy"));
+            Serial.println(F("Tego nie obsĹ‚ugujemy"));
     		  }
     		  else if(content_format_option == 42)
     		  {
             Serial.println(F("application/octet-stream"));
-            Serial.println(F("Tego nie obs�ugujemy"));
+            Serial.println(F("Tego nie obsĹ‚ugujemy"));
     		  }
     		  else if(content_format_option == 47)
     		  {
             Serial.println(F("application/exi"));
-            Serial.println(F("Tego nie obs�ugujemy"));
+            Serial.println(F("Tego nie obsĹ‚ugujemy"));
     		  }
     		  else if(content_format_option == 50)
     		  {
             Serial.println(F("application/json"));
-            Serial.println(F("Tego nie obs�ugujemy"));
+            Serial.println(F("Tego nie obsĹ‚ugujemy"));
     		  }
     		  break;
         }
@@ -432,6 +450,7 @@ void loop(void) {
           byte byte2_option[opt_length];
           if(opt_length == 1)
           {
+            byte2_option[0] = opt_value[0];
             Serial.println(byte2_option[0],BIN);
             NUM = byte2_option[0] >> 4;
             M = (byte2_option[0] >> 3) & 1;
@@ -501,18 +520,25 @@ void loop(void) {
           //Code 2.05 OK 01000101
           headerToSend[++it] = 69;
           //MID ab
-          headerToSend[++it] = 97;
-          headerToSend[++it] = 98;
+          ++MID_counter;
+          headerToSend[++it] = MID_counter >> 8;
+          headerToSend[++it] = MID_counter;
           //if exists copy token with TKL Bytes
           if(TKL != 0)
           {
-            memcpy ( &headerToSend+4, &packetBuffer+4, TKL );
+            //memcpy ( &headerToSend+4, &packetBuffer+4, TKL );
+            for (int i=0; i<TKL; ++i)
+            {
+              headerToSend[i+4] = packetBuffer[i+4];
+            }
+            Serial.println("tkd;");
+            Serial.println(headerToSend[it +TKL], HEX);
           }
           
           //Content Format delta 12 length 1 -> 193
           headerToSend[++it + TKL] = 193;
 
-          if(content_format_option == 50)
+          if(wellknownflag == true)
           {
             //content-format = 40
             headerToSend[++it + TKL] = 40;
@@ -569,7 +595,12 @@ void loop(void) {
           
           if(resource_id < 2)
           {
-            memcpy ( &coap_header, &headerToSend, sizeof(headerToSend) ); 
+            coap_header_size = sizeof(headerToSend)/sizeof(headerToSend[0]);
+            coap_header =  malloc (coap_header_size);
+            for(int i= 0; i<coap_header_size;++i)
+            {
+              coap_header[i] = headerToSend[i];
+            }
             sendGetToObject(resource_id);
           }
           if(resource_id == 2)
@@ -639,11 +670,11 @@ void sendPutToObject(byte payload[], int payloadSize)
   RF24NetworkHeader header(/*to node*/ other_node);
   frame_t message;
   message.header = 64;
+  message.value = 0;
   for(int i=0; i< payloadSize; i++)
   {
-    message.value = (payload[i] - 48) * pow(10, payloadSize -1 -i);
+    message.value += (payload[i] - 48) * pow(10, payloadSize -1 -i);
   }
-
   if(message.value > 1000)
     message.value = 1000;
   
@@ -691,15 +722,25 @@ void sendDiagnosticPayload()
   int buffer_size = 4;
   byte header[buffer_size];
   //Ver: 01 NON: 01 TKL: 0000
-  header[0] = 01010000;
-  //Code: 5.01 - not implemented
-  header[1] = 10100001;
+  header[0] = 80;
+  //Code: 5.01 - not implemented 10100001
+  header[1] = 161;
   //MID: ab
-  header[2] = 97;
-  header[3] = 98;
+  ++MID_counter;
+  header[2] = MID_counter >> 8;
+  header[3] = MID_counter;
   
   //send by udp
+  for(int i=0; i<buffer_size; ++i)
+  {
+    Serial.println(header[i], BIN);
+  }
   Serial.println(F("sending diagnostic payload to client"));
-  Udp.write(header, buffer_size);
+  Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+  int r=Udp.write(header, buffer_size);
+  Serial.println(r);
+  Udp.endPacket();
 }
+
+
 
