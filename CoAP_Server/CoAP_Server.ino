@@ -607,18 +607,19 @@ void loop(void) {
           {
             //send radio in payload
             //TODO skleic payload z radiem do wyslania
-            byte payloadToSend[9];
+            //byte payloadToSend[9];
             //TO REMOVE
-            payloadToSend[0] = 97;
-            payloadToSend[1] = 97;
-            payloadToSend[2] = 97;
-            payloadToSend[3] = 97;
-            payloadToSend[4] = 97;
-            payloadToSend[5] = 97;
-            payloadToSend[6] = 97;
-            payloadToSend[7] = 97;
-            payloadToSend[8] = 97;
-            sendToClient(headerToSend, sizeof(headerToSend), payloadToSend, sizeof(payloadToSend));
+//            payloadToSend[0] = 97;
+//            payloadToSend[1] = 97;
+//            payloadToSend[2] = 97;
+//            payloadToSend[3] = 97;
+//            payloadToSend[4] = 97;
+//            payloadToSend[5] = 97;
+//            payloadToSend[6] = 97;
+//            payloadToSend[7] = 97;
+//            payloadToSend[8] = 97;
+              byte *radioState = getRadioState();
+            sendToClient(headerToSend, sizeof(headerToSend), radioState, sizeof(radioState));
           }
           if(resource_id == 3)
           {
@@ -742,5 +743,33 @@ void sendDiagnosticPayload()
   Udp.endPacket();
 }
 
-
+byte *getRadioState(){
+  uint32_t _fails;
+  uint32_t _ok;
+  bool testCarrier = radio.testCarrier();
+  network.failures(_fails,_ok);
+  Serial.println(F("Radio stats O(OK sended payloads), N(not OK sen...), C(bool if there was a carrier on previous listening period)"));
+  Serial.println(_ok, DEC);
+  Serial.println(_fails, DEC);
+  Serial.println(testCarrier);
+  byte radioState[17];
+  radioState[0] = 79;
+  radioState[1] = 58;
+  radioState[2] = _ok >> 24;
+  radioState[3] = _ok >> 16;
+  radioState[4] = _ok >> 8;
+  radioState[5] = _ok;
+  radioState[6] = 32;
+  radioState[7] = 78;
+  radioState[8] = 58;
+  radioState[9] = _fails >> 24;
+  radioState[10] = _fails >> 16;
+  radioState[11] = _fails >> 8;
+  radioState[12] = _fails;
+  radioState[13] = 32;
+  radioState[14] = 67;
+  radioState[15] = 58;
+  radioState[16] = testCarrier;
+  return radioState;
+}
 
