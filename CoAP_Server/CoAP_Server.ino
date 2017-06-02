@@ -331,6 +331,8 @@ void loop(void) {
       Serial.println(opt_delta, BIN);
       Serial.println(F("length: "));
       Serial.println(opt_length, BIN);
+      Serial.println(F("option_no: "));
+      Serial.println(option_no, DEC);
       
       for(int i = 0;i < opt_length; ++i)
       {
@@ -409,27 +411,27 @@ void loop(void) {
     		  else if(content_format_option == 40)
     		  {
             Serial.println(F("application/link-format"));
-            Serial.println(F("Tego nie obsĹ‚ugujemy"));
+            Serial.println(F("Tego nie obsÄąâ€šugujemy"));
     		  }
     		  else if(content_format_option == 41)
     		  {
             Serial.println(F("application/xml"));
-            Serial.println(F("Tego nie obsĹ‚ugujemy"));
+            Serial.println(F("Tego nie obsÄąâ€šugujemy"));
     		  }
     		  else if(content_format_option == 42)
     		  {
             Serial.println(F("application/octet-stream"));
-            Serial.println(F("Tego nie obsĹ‚ugujemy"));
+            Serial.println(F("Tego nie obsÄąâ€šugujemy"));
     		  }
     		  else if(content_format_option == 47)
     		  {
             Serial.println(F("application/exi"));
-            Serial.println(F("Tego nie obsĹ‚ugujemy"));
+            Serial.println(F("Tego nie obsÄąâ€šugujemy"));
     		  }
     		  else if(content_format_option == 50)
     		  {
             Serial.println(F("application/json"));
-            Serial.println(F("Tego nie obsĹ‚ugujemy"));
+            Serial.println(F("Tego nie obsÄąâ€šugujemy"));
     		  }
     		  break;
         }
@@ -552,7 +554,7 @@ void loop(void) {
           headerToSend[++it + TKL] = 177;
           if(resource_id != 3)
           {
-            headerToSend[++it + TKL] = SZX | M <<3 | NUM << 6;
+            headerToSend[++it + TKL] = SZX | M <<3 | NUM << 4;
           }
           else
           {
@@ -564,7 +566,7 @@ void loop(void) {
             {
               M = 1;
             }
-            headerToSend[++it + TKL] = SZX | M <<3 | NUM << 6;
+            headerToSend[++it + TKL] = SZX | M <<3 | NUM << 4;
           }
 
           //Size2 delta 5 length 1?
@@ -772,4 +774,5 @@ byte *getRadioState(){
   radioState[16] = testCarrier;
   return radioState;
 }
+
 
