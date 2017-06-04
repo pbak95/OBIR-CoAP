@@ -29,6 +29,8 @@ struct frame_t {
   uint32_t value;
 };
 
+uint32_t counterMessageOk;
+uint32_t counterMessageFailed;
 uint8_t id;
 uint16_t MID_counter = 0;
 byte* coap_header = {};
@@ -86,8 +88,40 @@ void loop(void) {
       Serial.println(F("GET"));
       Serial.println(F("Light intensity"));
       Serial.println(message.value);
+//      byte temp[sizeof(message.value)];
+//      temp[0] = message.value >> 24;
+//      temp[1] = message.value >> 16;
+//      temp[2] = message.value >> 8 ;
+//      temp[3] = message.value;
+
+      int n = log10(message.value)+1;
+      char string[n];
+      sprintf(string, "%01d", message.value);
+      for(int i=0;i<sizeof(string)/sizeof(char);++i)
+      {
+        Serial.println(string[i]);
+      }
+      
+      byte toSend[12+n];
+      toSend[0] = 76;//L
+      toSend[1] = 73;//I
+      toSend[2] = 71;//G
+      toSend[3] = 72;//H
+      toSend[4] = 84;//T
+      toSend[5] = 32;
+      toSend[6] = 83;//S
+      toSend[7] = 84;//T
+      toSend[8] = 65;//A
+      toSend[9] = 84;//T
+      toSend[10] = 69;//E
+      toSend[11] = 58;//:
+      for(int i=0;i<sizeof(string)/sizeof(char);++i)
+      {
+        toSend[12+i] = string[i];
+      }
+      
       //send to client message.value
-      sendToClient(coap_header,coap_header_size, message.value, sizeof(message.value));
+      sendToClient(coap_header,coap_header_size, toSend, sizeof(toSend));
      }
 //     else{
 //      Serial.println(F("PUT"));
@@ -99,17 +133,66 @@ void loop(void) {
       Serial.println(F("button state and time"));
       Serial.println(message.state);
       Serial.println(message.value);
-      byte temp[sizeof(message.state)+sizeof(message.value)];
-      temp[0] = message.state;
-      temp[1] = message.value >> 24;
-      temp[2] = message.value >> 16 ;
-      temp[3] = message.value >> 8 ;
-      temp[4] = message.value;
+//      byte temp[sizeof(message.state)+sizeof(message.value)];
+//      temp[0] = message.state;
+//      temp[1] = message.value >> 24;
+//      temp[2] = message.value >> 16 ;
+//      temp[3] = message.value >> 8 ;
+//      temp[4] = message.value;
+
+      message.value = message.value/1000;
+      int n = log10(message.value)+1;
+
+      char string[n];
+      sprintf(string, "%01d", message.value);
+      for(int i=0;i<sizeof(string)/sizeof(char);++i)
+      {
+        Serial.println(string[i]);
+      }
+      int k = 0;
+      if(message.state == 0)
+      {
+        k = 3;
+      }
+      else if(message.state == 255)
+      {
+        k  = 2;
+      }
+      
+      byte toSend[12+k+n];
+      toSend[0] = 83;//S
+      toSend[1] = 84;//T
+      toSend[2] = 65;//A
+      toSend[3] = 84;//T
+      toSend[4] = 69;//E
+      toSend[5] = 58;//:
+      if(k==3)
+      {
+          toSend[6] = 79;//O
+          toSend[7] = 70;//F
+          toSend[8] = 70;//F  
+      }
+      else
+      {
+         toSend[6] = 79;//O
+         toSend[7] = 78;//N
+      }
+      toSend[6+k] = 32;//
+      toSend[7+k] = 84;//T
+      toSend[8+k] = 73;//I
+      toSend[9+k] = 77;//M
+      toSend[10+k] = 69;//E
+      toSend[11+k] = 58;//:
+      for(int i=0;i<sizeof(string)/sizeof(char);++i)
+      {
+        toSend[12+k+i] = string[i];
+      }
       //send to client message.value
-      sendToClient(coap_header,coap_header_size, temp ,sizeof(temp));
+      sendToClient(coap_header,coap_header_size, toSend ,sizeof(toSend));
     }
-   
+
   }
+
 
 //  //ETHERNET PART
   int packetSize = Udp.parsePacket();
@@ -621,6 +704,11 @@ void loop(void) {
 //            payloadToSend[7] = 97;
 //            payloadToSend[8] = 97;
               byte *radioState = getRadioState();
+              for (int i =0 ; i<sizeof(radioState)/sizeof(byte); i++)
+              {
+                Serial.print("vb");
+                Serial.println(radioState[i]);
+              }
             sendToClient(headerToSend, sizeof(headerToSend), radioState, sizeof(radioState));
           }
           if(resource_id == 3)
@@ -660,9 +748,15 @@ void sendGetToObject(int resource_id)
 
    bool ok = network.write(header, &message, sizeof(message));
     if (ok)
+    {
       Serial.println(F("Sending payload OK."));
+      counterMessageOk++;
+    }
     else
+    {
       Serial.println(F("Sending payload FAILED."));
+      counterMessageFailed++;
+    }
 }
 
 void sendPutToObject(byte payload[], int payloadSize)
@@ -686,9 +780,15 @@ void sendPutToObject(byte payload[], int payloadSize)
   Serial.println(message.value, DEC);
   bool ok = network.write(header, &message, sizeof(message));
   if (ok)
+  {
     Serial.println(F("Sending payload OK."));
+    counterMessageOk++;
+  }
   else
+  {
     Serial.println(F("Sending payload FAILED."));
+    counterMessageFailed++;
+  }
 }
 
 void sendToClient(byte *header,int header_size, byte *payload, int payload_size)
@@ -746,33 +846,35 @@ void sendDiagnosticPayload()
 }
 
 byte *getRadioState(){
-  uint32_t _fails;
-  uint32_t _ok;
+  //uint32_t _fails;
+  //uint32_t _ok;
   bool testCarrier = radio.testCarrier();
-  network.failures(_fails,_ok);
+ // network.failures(_fails,_ok);
   Serial.println(F("Radio stats O(OK sended payloads), N(not OK sen...), C(bool if there was a carrier on previous listening period)"));
-  Serial.println(_ok, DEC);
-  Serial.println(_fails, DEC);
+  Serial.println(counterMessageOk);
+  Serial.println(counterMessageFailed);
   Serial.println(testCarrier);
   byte radioState[17];
-  radioState[0] = 79;
-  radioState[1] = 58;
-  radioState[2] = _ok >> 24;
-  radioState[3] = _ok >> 16;
-  radioState[4] = _ok >> 8;
-  radioState[5] = _ok;
+  radioState[0] = 79;//o
+  radioState[1] = 58;//:
+  radioState[2] = counterMessageOk >> 24;
+  radioState[3] = counterMessageOk >> 16;
+  radioState[4] = counterMessageOk >> 8;
+  radioState[5] = counterMessageOk;
   radioState[6] = 32;
-  radioState[7] = 78;
-  radioState[8] = 58;
-  radioState[9] = _fails >> 24;
-  radioState[10] = _fails >> 16;
-  radioState[11] = _fails >> 8;
-  radioState[12] = _fails;
+  radioState[7] = 78;//N
+  radioState[8] = 58;//:
+  radioState[9] = counterMessageFailed >> 24;
+  radioState[10] = counterMessageFailed >> 16;
+  radioState[11] = counterMessageFailed >> 8;
+  radioState[12] = counterMessageFailed;
   radioState[13] = 32;
-  radioState[14] = 67;
-  radioState[15] = 58;
+  radioState[14] = 67;//C
+  radioState[15] = 58;//:
   radioState[16] = testCarrier;
-  return radioState;
+  return *radioState;
 }
+
+
 
 

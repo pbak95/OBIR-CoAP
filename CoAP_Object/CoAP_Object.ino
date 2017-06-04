@@ -33,7 +33,6 @@ void setup() {
   pinMode(2, INPUT); // przycisk monostabilny
   pinMode(3, OUTPUT); // lampka
   //Serial.println("jest ok ");
-  //Serial.println(255 - default_light_state * 255 / 1000);
 }
 
 void loop() {
