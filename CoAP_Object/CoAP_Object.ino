@@ -11,10 +11,10 @@ RF24Network network(radio); //wskazanie obiektu klasy współpracującego bezpo�
 
 unsigned long default_light_state = 1000; //set default light state = 1000
 int temp = 0; //temporary variable
-int tab[4]; // tablica przechowująca stan jasności lamki
-int j = 0; // zmienna iteracyjna potrzebna w celu usunięcia wpływu drgań pinów przycisku
-unsigned long button_time = 0; // time from last button state on czas od ostatniego przyciśnięcia przcisku
-unsigned long start = 0; // time from zmienna przechowująca czas do momentu uruchomienia programu
+int tab[4]; // light state table
+int j = 0; // potrzebna w celu usunięcia wpływu drgań pinów przycisku
+unsigned long button_time = 0; // time from last button state on
+unsigned long start = 0; // time from start running program
 const uint16_t this_node = 01; //Smart Object node
 const uint16_t other_node = 00; //CoAP Server node
 
