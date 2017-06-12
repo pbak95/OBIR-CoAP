@@ -41,6 +41,9 @@ bool payload_sended = false;
 //ETHERNET PART
 byte mac[] = {0x00, 0xaa, 0xbb, 0xcc, 0xde, 0xf4}; //MAC address of ehernet shield
 const int MAX_BUFFER = 80;
+int RADIO_PAYLOAD_SIZE = 11;
+int LIGHT_PAYLOAD_SIZE = 15;
+int BUTTON_PAYLOAD_SIZE = 19;
 byte packetBuffer[MAX_BUFFER];
 byte sendBuffer[MAX_BUFFER];
 EthernetUDP Udp;    //initializing UDP object
@@ -88,11 +91,6 @@ void loop(void) {
       Serial.println(F("GET"));
       Serial.println(F("Light intensity"));
       Serial.println(message.value);
-//      byte temp[sizeof(message.value)];
-//      temp[0] = message.value >> 24;
-//      temp[1] = message.value >> 16;
-//      temp[2] = message.value >> 8 ;
-//      temp[3] = message.value;
 
       int n = log10(message.value)+1;
       char string[n];
@@ -119,29 +117,20 @@ void loop(void) {
       {
         toSend[12+i] = string[i];
       }
-      
+
+      LIGHT_PAYLOAD_SIZE = 12 + n;
       //send to client message.value
       sendToClient(coap_header,coap_header_size, toSend, sizeof(toSend));
      }
-//     else{
-//      Serial.println(F("PUT"));
-//      Serial.println(F("Light intensity set"));
-//      Serial.println(message.value);
-//     }
     }else if(resource == 1){
       Serial.println(F("BUTTON"));
       Serial.println(F("button state and time"));
       Serial.println(message.state);
       Serial.println(message.value);
-//      byte temp[sizeof(message.state)+sizeof(message.value)];
-//      temp[0] = message.state;
-//      temp[1] = message.value >> 24;
-//      temp[2] = message.value >> 16 ;
-//      temp[3] = message.value >> 8 ;
-//      temp[4] = message.value;
-
+      int n = 1;
       message.value = message.value/1000;
-      int n = log10(message.value)+1;
+      if(message.value != 0)
+        n = log10(message.value)+1;
 
       char string[n];
       sprintf(string, "%01d", message.value);
@@ -187,6 +176,7 @@ void loop(void) {
       {
         toSend[12+k+i] = string[i];
       }
+      BUTTON_PAYLOAD_SIZE = 12 + n + k;
       //send to client message.value
       sendToClient(coap_header,coap_header_size, toSend ,sizeof(toSend));
     }
@@ -343,7 +333,7 @@ void loop(void) {
     //whether more blocks are following
     uint8_t M;
     //the size of the block
-    uint8_t SZX;
+    uint8_t SZX = 2;
     //Size2 for indicating the size of the representation transferred in responses
     byte * size2_option;
     int resource_id;
@@ -449,7 +439,7 @@ void loop(void) {
 
           if(strncmp(uri_path_option, "lamp",4) == 0)
           {
-            Serial.println(F("To jest lampa"));
+            Serial.println(F("To jest  a"));
             resource_id = 0;
             if(request_type == 1)
             {
@@ -484,9 +474,16 @@ void loop(void) {
         case 12:
         {
           Serial.println(F("Content-Format option"));
-          content_format_option=opt_value[0];
+          if(opt_length == 0)
+          {
+            content_format_option = 0;
+          }
+          else
+          {
+            content_format_option=opt_value[0]; 
+          }
           Serial.print(F("Content-Format: "));
-          Serial.println(opt_value[0],DEC);
+          Serial.println(content_format_option, DEC);
           if(content_format_option == 0)
     		  {
             Serial.println(F("text/plain"));
@@ -494,27 +491,22 @@ void loop(void) {
     		  else if(content_format_option == 40)
     		  {
             Serial.println(F("application/link-format"));
-            Serial.println(F("Tego nie obsÄąâ€šugujemy"));
     		  }
     		  else if(content_format_option == 41)
     		  {
             Serial.println(F("application/xml"));
-            Serial.println(F("Tego nie obsÄąâ€šugujemy"));
     		  }
     		  else if(content_format_option == 42)
     		  {
             Serial.println(F("application/octet-stream"));
-            Serial.println(F("Tego nie obsÄąâ€šugujemy"));
     		  }
     		  else if(content_format_option == 47)
     		  {
             Serial.println(F("application/exi"));
-            Serial.println(F("Tego nie obsÄąâ€šugujemy"));
     		  }
     		  else if(content_format_option == 50)
     		  {
             Serial.println(F("application/json"));
-            Serial.println(F("Tego nie obsÄąâ€šugujemy"));
     		  }
     		  break;
         }
@@ -522,7 +514,14 @@ void loop(void) {
         {
           Serial.println(F("Accept option"));
           byte accept_option;
-          accept_option=opt_value[0];
+          if(opt_length == 0)
+          {
+            accept_option = 0;
+          }
+          else
+          {
+            accept_option=opt_value[0]; 
+          }
           if(accept_option == content_format_option)
             Serial.println(F("Accept"));
     		  else
@@ -536,7 +535,6 @@ void loop(void) {
           if(opt_length == 1)
           {
             byte2_option[0] = opt_value[0];
-            Serial.println(byte2_option[0],BIN);
             NUM = byte2_option[0] >> 4;
             M = (byte2_option[0] >> 3) & 1;
             SZX = byte2_option[0] & 7;
@@ -661,21 +659,15 @@ void loop(void) {
           }
           if(resource_id == 2)
           {
-            //TO REMOVE
-            uint8_t radioLength = 55;
-            headerToSend[++it + TKL] = radioLength;
+            headerToSend[++it + TKL] = RADIO_PAYLOAD_SIZE;
           }
           if(resource_id == 1)
           {
-            //TO REMOVE
-            uint8_t buttonLength = 55;
-            headerToSend[++it + TKL] = buttonLength;
+            headerToSend[++it + TKL] = BUTTON_PAYLOAD_SIZE;
           }
           if(resource_id == 0)
           {
-            //TO REMOVE
-            uint8_t lampLength = 55;
-            headerToSend[++it + TKL] = lampLength;
+            headerToSend[++it + TKL] = LIGHT_PAYLOAD_SIZE;
           }
           
           if(resource_id < 2)
@@ -691,31 +683,14 @@ void loop(void) {
           if(resource_id == 2)
           {
             //send radio in payload
-            //TODO skleic payload z radiem do wyslania
-            //byte payloadToSend[9];
-            //TO REMOVE
-//            payloadToSend[0] = 97;
-//            payloadToSend[1] = 97;
-//            payloadToSend[2] = 97;
-//            payloadToSend[3] = 97;
-//            payloadToSend[4] = 97;
-//            payloadToSend[5] = 97;
-//            payloadToSend[6] = 97;
-//            payloadToSend[7] = 97;
-//            payloadToSend[8] = 97;
-              byte *radioState = getRadioState();
-              for (int i =0 ; i<sizeof(radioState)/sizeof(byte); i++)
-              {
-                Serial.print("vb");
-                Serial.println(radioState[i]);
-              }
-            sendToClient(headerToSend, sizeof(headerToSend), radioState, sizeof(radioState));
+            byte * radioState = getRadioState();
+            sendToClient(headerToSend, sizeof(headerToSend), radioState, RADIO_PAYLOAD_SIZE);
           }
           if(resource_id == 3)
           {
             //send specified block of .wellknown/core
-            //TODO check which fragment NUM    
-            Serial.println(F("debug"));     
+            Serial.println(F("debug")); 
+            Serial.println(fragmentation_size,DEC);    
             byte payloadToSend[fragmentation_size];
             for(int i=0;i<fragmentation_size;++i)
             {
@@ -772,6 +747,7 @@ void sendPutToObject(byte payload[], int payloadSize)
   {
     message.value += (payload[i] - 48) * pow(10, payloadSize -1 -i);
   }
+  ++message.value;
   if(message.value > 1000)
     message.value = 1000;
   
@@ -845,34 +821,50 @@ void sendDiagnosticPayload()
   Udp.endPacket();
 }
 
-byte *getRadioState(){
-  //uint32_t _fails;
-  //uint32_t _ok;
+byte * getRadioState(){
+  int n = 1;
+  int m = 1;
   bool testCarrier = radio.testCarrier();
  // network.failures(_fails,_ok);
   Serial.println(F("Radio stats O(OK sended payloads), N(not OK sen...), C(bool if there was a carrier on previous listening period)"));
   Serial.println(counterMessageOk);
   Serial.println(counterMessageFailed);
   Serial.println(testCarrier);
-  byte radioState[17];
-  radioState[0] = 79;//o
-  radioState[1] = 58;//:
-  radioState[2] = counterMessageOk >> 24;
-  radioState[3] = counterMessageOk >> 16;
-  radioState[4] = counterMessageOk >> 8;
-  radioState[5] = counterMessageOk;
-  radioState[6] = 32;
-  radioState[7] = 78;//N
-  radioState[8] = 58;//:
-  radioState[9] = counterMessageFailed >> 24;
-  radioState[10] = counterMessageFailed >> 16;
-  radioState[11] = counterMessageFailed >> 8;
-  radioState[12] = counterMessageFailed;
-  radioState[13] = 32;
-  radioState[14] = 67;//C
-  radioState[15] = 58;//:
-  radioState[16] = testCarrier;
-  return *radioState;
+  
+  //digits in countermessageok
+  if(counterMessageOk != 0)
+    n = log10(counterMessageOk)+1;
+  //digits in countermessagefailed
+  if(counterMessageFailed != 0)
+    m = log10(counterMessageFailed)+1;
+  char stringN[n];
+  char stringM[m];
+  sprintf(stringN, "%01d", counterMessageOk);
+  sprintf(stringM, "%01d", counterMessageFailed);
+  
+  byte radioState[9+n+m];
+  int iter=0;
+  radioState[iter] = 79;//o
+  radioState[++iter] = 58;//:
+  for(int i=0;i<sizeof(stringN)/sizeof(char);++i)
+  {
+    radioState[++iter+i] = stringN[i];
+  }
+  radioState[++iter] = 32;
+  radioState[++iter] = 78;//N
+  radioState[++iter] = 58;//:
+  for(int i=0;i<sizeof(stringM)/sizeof(char);++i)
+  {
+    radioState[++iter+i] = stringM[i];
+  }
+  radioState[++iter] = 32;// space
+  radioState[++iter] = 67;//C
+  radioState[++iter] = 58;//:
+  radioState[++iter] = testCarrier + 48; // 0 - false , 1 - true
+  RADIO_PAYLOAD_SIZE = ++iter;
+  Serial.println(F("adsfgasfadf"));
+  Serial.println(iter);
+  return radioState;
 }
 
 
