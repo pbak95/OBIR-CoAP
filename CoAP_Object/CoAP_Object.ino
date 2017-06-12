@@ -6,13 +6,13 @@
 #include <RF24.h>
 #include <SPI.h>
 
-RF24 radio(7, 8); // 7,8 - numery wyprowadzeń płytki Arduino, do których dołączono, odpowiednio, sygnały CE i CS układu radiowego
-RF24Network network(radio); //wskazanie obiektu klasy współpracującego bezpośrednio z układem radiowym
+RF24 radio(7, 8); // 7,8 - out Arduino pins connect with radio module
+RF24Network network(radio);
 
 unsigned long default_light_state = 1000; //set default light state = 1000
 int temp = 0; //temporary variable
 int tab[4]; // light state table
-int j = 0; // potrzebna w celu usunięcia wpływu drgań pinów przycisku
+int j = 0; // to remove oscilate button pins
 unsigned long button_time = 0; // time from last button state on
 unsigned long start = 0; // time from start running program
 const uint16_t this_node = 01; //Smart Object node
@@ -112,7 +112,7 @@ void loop() {
       //Button
       else if (resource == 1)
       {
-        Serial.println(resource);
+        Serial.print(resource);
         Serial.println(F(" - BUTTON"));
         if (digitalRead(2) == LOW)
         {
@@ -159,7 +159,7 @@ void loop() {
       if (resource == 0)
       {
         Serial.print(resource);
-        Serial.println(F(" - BUTTON"));
+        Serial.println(F(" - LAMP"));
         Serial.print(F("Received light state from CoAP Server: "));
         Serial.println(object_value);
         default_light_state = object_value; // set light state which received from CoAP Server
