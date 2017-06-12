@@ -7,7 +7,10 @@
 #include <RF24_config.h>
 
 /**
-   Implementation of CoAP Server
+   Implementation of CoAP Server - OBIR
+   @author Patryk Bąk
+   @author Tomasz Boguski
+   @author Michał Krzemiński
 */
 #include <SPI.h>
 #include <Ethernet.h>
@@ -22,14 +25,16 @@ const uint16_t other_node = 01;   // Address of the other node in Octal format
 
 //Structure of payload sending to smart object
 struct frame_t {
-  uint8_t header;
-  uint8_t state;
-  uint32_t value;
+  uint8_t header; // header which specifies: operation(2b): GET,PUT; resource(6b): LAMP, BUTTON 
+  uint8_t state; //specifies state of button: 0 - OFF, 255 - ON
+  uint32_t value; // value which depends from resource, time for button, light intesity for lamp
 };
+
+//COAP PART
 
 //map like structure for button representation, key - etag, value - button payload
 struct map {
-  uint8_t etag;
+  uint8_t etag; //etag value
   byte * payload;
   int payload_size;
 };
@@ -37,22 +42,21 @@ struct map {
 const int SIZE_OF_MAP = 10;
 struct map button_map[SIZE_OF_MAP];
 uint8_t map_iterator = 0;
-uint8_t requested_etag = -1;
-uint8_t counterMessageOk = 0;
-uint8_t counterMessageFailed = 0;
-uint8_t id;
-uint16_t MID_counter = 0;
-byte* coap_header = {};
+uint8_t requested_etag = -1; //default value for etag
+uint8_t counterMessageOk = 0; //number of payloads properly sended to smart object
+uint8_t counterMessageFailed = 0; //number of payloads failed while sending to smart object
+uint16_t MID_counter = 0; //message ID parameter counter
+byte* coap_header = {}; //some part of coap header which will be resent to client
 uint8_t coap_header_size = 0;
-int fragmentation_size = 64;
-bool payload_sended = false;
+int fragmentation_size = 64; // fragmentation size used wich block 2 option
+bool payload_sended = false; // flag which indicates diagnostic payload sending
 
 //ETHERNET PART
 byte mac[] = {0x00, 0xaa, 0xbb, 0xcc, 0xde, 0xf4}; //MAC address of ehernet shield
-const int MAX_BUFFER = 80;
-int RADIO_PAYLOAD_SIZE = 11;
-int LIGHT_PAYLOAD_SIZE = 15;
-int BUTTON_PAYLOAD_SIZE = 19;
+const int MAX_BUFFER = 80; // max UDP payload size
+int RADIO_PAYLOAD_SIZE = 11; //radio resource size of UDP payload in bytes
+int LIGHT_PAYLOAD_SIZE = 15;  //light resource size of UDP payload in bytes
+int BUTTON_PAYLOAD_SIZE = 19; //button resource size of UDP payload in bytes
 byte packetBuffer[MAX_BUFFER];
 byte sendBuffer[MAX_BUFFER];
 EthernetUDP Udp;    //initializing UDP object
@@ -100,7 +104,6 @@ void loop(void) {
       Serial.println(F("GET"));
       Serial.println(F("Light intensity"));
       Serial.println(message.value);
-
       int n = log10(message.value)+1;
       char string[n];
       sprintf(string, "%01d", message.value);
@@ -108,7 +111,7 @@ void loop(void) {
       {
         Serial.println(string[i]);
       }
-      
+      //prepare value from smart object to send to coap client
       byte toSend[12+n];
       toSend[0] = 76;//L
       toSend[1] = 73;//I
@@ -148,6 +151,7 @@ void loop(void) {
         Serial.println(string[i]);
       }
       int k = 0;
+      //checking button state and convert to human redable format
       if(message.state == 0)
       {
         k = 3;
@@ -156,7 +160,7 @@ void loop(void) {
       {
         k  = 2;
       }
-      
+      //prepare value from smart object to send to coap client
       byte toSend[12+k+n];
       toSend[0] = 83;//S
       toSend[1] = 84;//T
@@ -206,7 +210,7 @@ void loop(void) {
 //  //ETHERNET PART
   int packetSize = Udp.parsePacket();
   if (packetSize) {
-    Udp.read(packetBuffer, MAX_BUFFER);
+    Udp.read(packetBuffer, MAX_BUFFER); //read packet from coap client
     Serial.println(packetSize);
 //
 //    /*0                   1                   2                   3
@@ -243,7 +247,7 @@ void loop(void) {
     }
     else
     {
-      Serial.println(F("Type: other"));
+      Serial.println(F("Type: other")); //other type, send diagnostic payload
       flag = true;
       payload_sended = true;
       sendDiagnosticPayload();
@@ -253,7 +257,7 @@ void loop(void) {
 
     //field token length 0-255
     Serial.println(packetBuffer[0], BIN);
-    uint8_t TKL = packetBuffer[0] & 15;
+    uint8_t TKL = packetBuffer[0] & 15; 
     Serial.print(F("TKL: "));
     Serial.println(TKL, BIN);
 
@@ -286,7 +290,7 @@ void loop(void) {
        else
        {
         Serial.println(F("Different request"));
-        sendDiagnosticPayload();
+        sendDiagnosticPayload(); //other request, sending diagnostic payload
         payload_sended = true;
        }
        break;
@@ -344,13 +348,15 @@ void loop(void) {
     char * uri_path_option;
     //the relative number of the block within a sequence of blocks
     uint8_t NUM;
-    //whether more blocks are following
+    //flag defining whether more blocks are following
     uint8_t M;
     //the size of the block
     uint8_t SZX = 2;
     //Size2 for indicating the size of the representation transferred in responses
     byte * size2_option;
+    //resource id 0 - light, 1 - button, 2 - radio, 3 - well-known/core
     int resource_id;
+    //content format option
 	  byte content_format_option;
           
     //number that indicates option
@@ -436,7 +442,7 @@ void loop(void) {
           Serial.println(F("ETag option: "));
           requested_etag = opt_value[0];
 			    Serial.println(requested_etag);
-          etag_flag = true;
+          etag_flag = true; //set etag flag to add to map
           break;
         }
 		    case 11:
@@ -451,28 +457,27 @@ void loop(void) {
 
           if(strncmp(uri_path_option, "lamp",4) == 0)
           {
-            Serial.println(F("To jest  a"));
+            Serial.println(F("This is lamp"));
             resource_id = 0;
           }
-          else if(strncmp(uri_path_option, "button",6) == 
-          0)
+          else if(strncmp(uri_path_option, "button",6) == 0)
           {
-            Serial.println(F("To jest button"));
+            Serial.println(F("This is button"));
             resource_id = 1;
-            etag_flag = true;
+            etag_flag = true; //set etag flag to add to map
           }
           else if(strncmp(uri_path_option, "radio",5) == 0)
           {
-            Serial.println(F("To jest radio"));
+            Serial.println(F("This is radio"));
             resource_id = 2;
           }
           else if(strncmp(uri_path_option, ".well-known",11) == 0)
           {
-            wellknownflag = true;
+            wellknownflag = true; //set well-known/core flag
           }
           else if(strncmp(uri_path_option, "core",4) == 0 && wellknownflag == true)
           {
-            Serial.println(F("To jest .well-known/core"));
+            Serial.println(F("This is .well-known/core"));
             body = "<button>;rt=\"button\";if=\"sensor\",<light>;rt=\"light\";if=\"sensor\",<radio>;rt=\"radio\";if=\"sensor\"";
             wellknownLength = strlen(body);
             resource_id = 3;            
@@ -543,7 +548,7 @@ void loop(void) {
           if(opt_length == 1)
           {
             byte2_option[0] = opt_value[0];
-            NUM = byte2_option[0] >> 4;
+            NUM = byte2_option[0] >> 4; 
             M = (byte2_option[0] >> 3) & 1;
             SZX = byte2_option[0] & 7;
             fragmentation_size = pow(2,SZX+4) + 1;
@@ -704,14 +709,14 @@ void loop(void) {
           {
             //send radio in payload
             byte* radioState = {};
-            getRadioState();
+            getRadioState(); 
             radioState = malloc(RADIO_PAYLOAD_SIZE);
-            radioState = getRadioState();
+            radioState = getRadioState(); // get radio statistics method
             for(int i = 0;i<RADIO_PAYLOAD_SIZE;++i)
             {
               Serial.println(radioState[i]);
             }
-            sendToClient(headerToSend, sizeof(headerToSend), radioState, RADIO_PAYLOAD_SIZE);
+            sendToClient(headerToSend, sizeof(headerToSend), radioState, RADIO_PAYLOAD_SIZE); // send radio metrics to coap client
           }
           if(resource_id == 3)
           {
@@ -722,7 +727,7 @@ void loop(void) {
             {
               payloadToSend[i] = body[NUM*fragmentation_size + i];
             }
-            sendToClient(headerToSend, sizeof(headerToSend), payloadToSend, sizeof(payloadToSend));
+            sendToClient(headerToSend, sizeof(headerToSend), payloadToSend, sizeof(payloadToSend)); // send wellknown/core to coap client
           }
         }
       }
@@ -730,9 +735,9 @@ void loop(void) {
   }
 }
 
+//function sending get request to smart object, as a argument it takes resource id 
 void sendGetToObject(int resource_id)
 {
-  //function to send message to smart object
   Serial.println(F("sending message to object"));
   RF24NetworkHeader header(/*to node*/ other_node);
   frame_t message;
@@ -751,15 +756,16 @@ void sendGetToObject(int resource_id)
     if (ok)
     {
       Serial.println(F("Sending payload OK."));
-      counterMessageOk++;
+      counterMessageOk++; //payload sending OK
     }
     else
     {
       Serial.println(F("Sending payload FAILED."));
-      counterMessageFailed++;
+      counterMessageFailed++; //payload sending failed
     }
 }
-
+//function sending put request to smart object, as a argument it takes payload from coap client and payload size
+//this function also translate parameters from coap client before sending it to smart object
 void sendPutToObject(byte payload[], int payloadSize)
 {
    //function to send message to smart object
@@ -767,14 +773,14 @@ void sendPutToObject(byte payload[], int payloadSize)
   Serial.println(payloadSize);
   RF24NetworkHeader header(/*to node*/ other_node);
   frame_t message;
-  message.header = 64;
+  message.header = 64; //method PUT, resource lamp
   message.value = 0;
   for(int i=0; i< payloadSize; i++)
   {
     message.value += (payload[i] - 48) * pow(10, payloadSize -1 -i);
   }
   ++message.value;
-  if(message.value > 1000)
+  if(message.value > 1000) //max lamp intesity is 1000
     message.value = 1000;
   
 
@@ -784,18 +790,17 @@ void sendPutToObject(byte payload[], int payloadSize)
   if (ok)
   {
     Serial.println(F("Sending payload OK."));
-    counterMessageOk++;
+    counterMessageOk++; //payload sending OK
   }
   else
   {
     Serial.println(F("Sending payload FAILED."));
-    counterMessageFailed++;
+    counterMessageFailed++; //payload sending failed
   }
 }
-
+//method which sends values from smart object to coap client
 void sendToClient(byte *header,int header_size, byte *payload, int payload_size)
 {
-  //function to send message to coap client
   //packet size header + flag + payload
   byte packet[header_size + 1 + payload_size];
 
@@ -820,11 +825,10 @@ void sendToClient(byte *header,int header_size, byte *payload, int payload_size)
   Serial.println(r);
   Udp.endPacket();
 }
-
+//function which sends diagnostic payload to coap client
 void sendDiagnosticPayload()
 {
-  //function to send to client diagnostic payload
-  int buffer_size = 4;
+  int buffer_size = 4; //apropriate size in bytes for diagnostic payload header
   byte header[buffer_size];
   //Ver: 01 NON: 01 TKL: 0000
   header[0] = 80;
@@ -846,12 +850,12 @@ void sendDiagnosticPayload()
   Serial.println(r);
   Udp.endPacket();
 }
-
+//get current radio state
 byte * getRadioState()
 {
-  int n = 1;
-  int m = 1;
-  bool testCarrier = radio.testCarrier();
+  int n = 1; //initialize size of char array for radio statistics
+  int m = 1; //initialize size for radio statistics
+  bool testCarrier = radio.testCarrier(); //check if there was a carrier in previous listening period
   Serial.println(F("Radio stats O(OK sended payloads), N(not OK sen...), C(bool if there was a carrier on previous listening period)"));
   Serial.println(counterMessageOk);
   Serial.println(counterMessageFailed);
@@ -925,6 +929,7 @@ byte * getRadioState()
   return radioState;
 }
 
+//add resource representation to association map for etag option purposes
 void addToMap(byte *value, int value_size)
 {
   button_map[map_iterator].etag = map_iterator;
@@ -936,7 +941,7 @@ void addToMap(byte *value, int value_size)
   button_map[map_iterator].payload_size = value_size;
   ++map_iterator;
 }
-
+//checking if association tamap for etag option purposes
 bool ifMapHasKey(uint8_t key)
 {
   for(int i=0;i<map_iterator;++i)
