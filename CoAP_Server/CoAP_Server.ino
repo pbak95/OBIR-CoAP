@@ -38,8 +38,8 @@ const int SIZE_OF_MAP = 10;
 struct map button_map[SIZE_OF_MAP];
 uint8_t map_iterator = 0;
 uint8_t requested_etag = -1;
-uint32_t counterMessageOk;
-uint32_t counterMessageFailed;
+uint8_t counterMessageOk = 0;
+uint8_t counterMessageFailed = 0;
 uint8_t id;
 uint16_t MID_counter = 0;
 byte* coap_header = {};
@@ -703,7 +703,14 @@ void loop(void) {
           if(resource_id == 2)
           {
             //send radio in payload
-            byte * radioState = getRadioState();
+            byte* radioState = {};
+            getRadioState();
+            radioState = malloc(RADIO_PAYLOAD_SIZE);
+            radioState = getRadioState();
+            for(int i = 0;i<RADIO_PAYLOAD_SIZE;++i)
+            {
+              Serial.println(radioState[i]);
+            }
             sendToClient(headerToSend, sizeof(headerToSend), radioState, RADIO_PAYLOAD_SIZE);
           }
           if(resource_id == 3)
@@ -845,43 +852,76 @@ byte * getRadioState()
   int n = 1;
   int m = 1;
   bool testCarrier = radio.testCarrier();
- // network.failures(_fails,_ok);
   Serial.println(F("Radio stats O(OK sended payloads), N(not OK sen...), C(bool if there was a carrier on previous listening period)"));
   Serial.println(counterMessageOk);
   Serial.println(counterMessageFailed);
   Serial.println(testCarrier);
-  
+
   //digits in countermessageok
-  if(counterMessageOk != 0)
-    n = log10(counterMessageOk)+1;
+  if(counterMessageOk > 100)
+  {
+    n = 3;
+  }
+  else if(counterMessageOk < 100 && counterMessageOk >= 10)
+  {
+    n = 2;
+  }
   //digits in countermessagefailed
-  if(counterMessageFailed != 0)
-    m = log10(counterMessageFailed)+1;
+  if(counterMessageFailed > 100)
+  {
+    m = 3;
+  }
+  else if(counterMessageFailed < 100 && counterMessageFailed >= 10)
+  {
+    m = 2;
+  }
   char stringN[n];
   char stringM[m];
-  sprintf(stringN, "%01d", counterMessageOk);
-  sprintf(stringM, "%01d", counterMessageFailed);
+  if(counterMessageOk == 0)
+  {
+    stringN[0] = 48;
+  }
+  else
+  {
+    sprintf(stringN, "%d", counterMessageOk);
+  }
+  if(counterMessageFailed == 0)
+  {
+    stringM[0] = 48;
+  }
+  else
+  {
+    sprintf(stringM, "%d", counterMessageFailed); 
+  }
   
-  byte radioState[9+n+m];
-  int iter=0;
-  radioState[iter] = 79;//o
-  radioState[++iter] = 58;//:
-  for(int i=0;i<sizeof(stringN)/sizeof(char);++i)
+  byte * radioState = malloc(9+n+m);
+  int radio_iter=0;
+  radioState[radio_iter] = 79;//o
+  radioState[++radio_iter] = 58;//:
+  ++radio_iter;
+  for(int i=0;i<n;++i)
   {
-    radioState[++iter+i] = stringN[i];
+    radioState[radio_iter+i] = stringN[i];
   }
-  radioState[++iter] = 32;
-  radioState[++iter] = 78;//N
-  radioState[++iter] = 58;//:
-  for(int i=0;i<sizeof(stringM)/sizeof(char);++i)
+  radio_iter+=n;
+  radioState[radio_iter] = 32;
+  radioState[++radio_iter] = 78;//N
+  radioState[++radio_iter] = 58;//:
+  ++radio_iter;
+  for(int i=0;i<m;++i)
   {
-    radioState[++iter+i] = stringM[i];
+    radioState[radio_iter+i] = stringM[i];
   }
-  radioState[++iter] = 32;// space
-  radioState[++iter] = 67;//C
-  radioState[++iter] = 58;//:
-  radioState[++iter] = testCarrier + 48; // 0 - false , 1 - true
-  RADIO_PAYLOAD_SIZE = ++iter;
+  radio_iter+=m;
+  radioState[radio_iter] = 32;// space
+  radioState[++radio_iter] = 67;//C
+  radioState[++radio_iter] = 58;//:
+  radioState[++radio_iter] = testCarrier + 48; // 0 - false , 1 - true
+  RADIO_PAYLOAD_SIZE = ++radio_iter;
+  for(int i = 0;i<RADIO_PAYLOAD_SIZE;++i)
+  {
+    Serial.println(radioState[i]);
+  }
   return radioState;
 }
 
