@@ -20,8 +20,6 @@ RF24Network network(radio);      // Network uses that radio
 const uint16_t this_node = 00;    // Address of our node in Octal format ( 04,031, etc)
 const uint16_t other_node = 01;   // Address of the other node in Octal format
 
-
-
 //Structure of payload sending to smart object
 struct frame_t {
   uint8_t header;
@@ -29,6 +27,15 @@ struct frame_t {
   uint32_t value;
 };
 
+//map like structure for button representation, key - etag, value - button payload
+struct map {
+  uint8_t etag;
+  byte * payload;
+};
+
+const int SIZE_OF_MAP = 10;
+struct map button_map[SIZE_OF_MAP];
+uint8_t map_iterator = 0;
 uint32_t counterMessageOk;
 uint32_t counterMessageFailed;
 uint8_t id;
@@ -176,6 +183,10 @@ void loop(void) {
       {
         toSend[12+k+i] = string[i];
       }
+      
+      //saving to map current representation
+      addToMap(toSend, sizeof(toSend));
+      
       BUTTON_PAYLOAD_SIZE = 12 + n + k;
       //send to client message.value
       sendToClient(coap_header,coap_header_size, toSend ,sizeof(toSend));
@@ -821,7 +832,8 @@ void sendDiagnosticPayload()
   Udp.endPacket();
 }
 
-byte * getRadioState(){
+byte * getRadioState()
+{
   int n = 1;
   int m = 1;
   bool testCarrier = radio.testCarrier();
@@ -867,6 +879,12 @@ byte * getRadioState(){
   return radioState;
 }
 
+void addToMap(byte *value, int value_size)
+{
+  button_map[map_iterator].etag = map_iterator;
+  button_map[map_iterator].payload = value;
+  ++map_iterator;
+}
 
 
 
