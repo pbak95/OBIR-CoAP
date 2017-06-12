@@ -31,11 +31,13 @@ struct frame_t {
 struct map {
   uint8_t etag;
   byte * payload;
+  int payload_size;
 };
 
 const int SIZE_OF_MAP = 10;
 struct map button_map[SIZE_OF_MAP];
 uint8_t map_iterator = 0;
+uint8_t requested_etag = -1;
 uint32_t counterMessageOk;
 uint32_t counterMessageFailed;
 uint8_t id;
@@ -189,11 +191,17 @@ void loop(void) {
       
       BUTTON_PAYLOAD_SIZE = 12 + n + k;
       //send to client message.value
-      sendToClient(coap_header,coap_header_size, toSend ,sizeof(toSend));
+      if(ifMapHasKey(requested_etag))
+      {
+        sendToClient(coap_header,coap_header_size, button_map[requested_etag].payload ,button_map[requested_etag].payload_size);
+      }
+      else
+      {
+        sendToClient(coap_header,coap_header_size, button_map[map_iterator-1].payload ,button_map[map_iterator-1].payload_size);
+      }
+      requested_etag = -1;
     }
-
   }
-
 
 //  //ETHERNET PART
   int packetSize = Udp.parsePacket();
@@ -260,9 +268,6 @@ void loop(void) {
     Serial.print(F("."));
     Serial.println(code_detail, DEC);
 
-    //type of request
-    int request_type;
-
     switch(code_class)
     {
       case 0:
@@ -272,13 +277,11 @@ void loop(void) {
        {
         //GET
         Serial.println(F("GET request"));
-        request_type = 1;
        }
        else if(code_detail == 3)
        {
         //PUT
         Serial.println(F("PUT request"));
-        request_type = 3;
        }
        else
        {
@@ -349,7 +352,7 @@ void loop(void) {
     byte * size2_option;
     int resource_id;
 	  byte content_format_option;
-
+          
     //number that indicates option
     uint8_t option_no = 0;
 
@@ -362,6 +365,8 @@ void loop(void) {
     byte *body;
     //wellknown/core flag
     bool wellknownflag = false;
+    //if etag option received
+    bool etag_flag = false;
               
     //loop until flag 11111111 that ends header
     while((packetBuffer[iter] != 255) && (packetBuffer[iter] != 0))
@@ -428,17 +433,13 @@ void loop(void) {
       {
         case 4:
         {
-          Serial.println(F("ETag option"));
-          byte etag_option[opt_length];
-		      Serial.println(F("ETag: "));
-          for(int i=0;i<opt_length;++i)
-          {
-            etag_option[i]=opt_value[i];
-			      Serial.println(etag_option[i]);
-          }
+          Serial.println(F("ETag option: "));
+          requested_etag = opt_value[0];
+			    Serial.println(requested_etag);
+          etag_flag = true;
           break;
         }
-		case 11:
+		    case 11:
         {
           Serial.println(F("Uri-Path option"));
           uri_path_option = (char*) malloc (opt_length);
@@ -452,24 +453,20 @@ void loop(void) {
           {
             Serial.println(F("To jest  a"));
             resource_id = 0;
-            if(request_type == 1)
-            {
-              sendGetToObject(resource_id);
-            }
           }
           else if(strncmp(uri_path_option, "button",6) == 
           0)
           {
             Serial.println(F("To jest button"));
             resource_id = 1;
-            //sendGetToObject(resource_id);
+            etag_flag = true;
           }
           else if(strncmp(uri_path_option, "radio",5) == 0)
           {
             Serial.println(F("To jest radio"));
             resource_id = 2;
           }
-          else if(strncmp(uri_path_option, ".well-known/core",11) == 0)
+          else if(strncmp(uri_path_option, ".well-known",11) == 0)
           {
             wellknownflag = true;
           }
@@ -625,28 +622,40 @@ void loop(void) {
             {
               headerToSend[i+4] = packetBuffer[i+4];
             }
-            Serial.println("tkd;");
             Serial.println(headerToSend[it +TKL], HEX);
           }
+          it +=TKL;
+          ///options
+          int delta_offset = 0;
+          if(etag_flag == true)
+          {
+            //ETag delta 4 length 1
+            headerToSend[++it] = 1 | (4 << 4);
+            delta_offset = 4;
+            //Etag value last added to map
+            headerToSend[++it] = map_iterator;
+          }
           
-          //Content Format delta 12 length 1 -> 193
-          headerToSend[++it + TKL] = 193;
+          //Content Format 12 length 1
+          headerToSend[++it] = 1 | (12 - delta_offset << 4);
+          delta_offset = 12;
 
           if(wellknownflag == true)
           {
             //content-format = 40
-            headerToSend[++it + TKL] = 40;
+            headerToSend[++it] = 40;
           }
           else
           {
             //content-format = 0
-            headerToSend[++it + TKL] = 0;
+            headerToSend[++it] = 0;
           }
-          //Block2 delta 11 length 1 -> 177
-          headerToSend[++it + TKL] = 177;
+          //Block2 23 length 1
+          headerToSend[++it] = 1 | (23 - delta_offset << 4);
+          delta_offset = 23;
           if(resource_id != 3)
           {
-            headerToSend[++it + TKL] = SZX | M <<3 | NUM << 4;
+            headerToSend[++it] = SZX | M <<3 | NUM << 4;
           }
           else
           {
@@ -658,32 +667,32 @@ void loop(void) {
             {
               M = 1;
             }
-            headerToSend[++it + TKL] = SZX | M <<3 | NUM << 4;
+            headerToSend[++it] = SZX | M <<3 | NUM << 4;
           }
 
-          //Size2 delta 5 length 1?
-          headerToSend[++it + TKL] = 81;
+          //Size2 28 length 1
+          headerToSend[++it] = 1 | (28 - delta_offset << 4);
           
           if(resource_id == 3)
           { 
-            headerToSend[++it + TKL] = wellknownLength;
+            headerToSend[++it] = wellknownLength;
           }
           if(resource_id == 2)
           {
-            headerToSend[++it + TKL] = RADIO_PAYLOAD_SIZE;
+            headerToSend[++it] = RADIO_PAYLOAD_SIZE;
           }
           if(resource_id == 1)
           {
-            headerToSend[++it + TKL] = BUTTON_PAYLOAD_SIZE;
+            headerToSend[++it] = BUTTON_PAYLOAD_SIZE;
           }
           if(resource_id == 0)
           {
-            headerToSend[++it + TKL] = LIGHT_PAYLOAD_SIZE;
+            headerToSend[++it] = LIGHT_PAYLOAD_SIZE;
           }
-          
+          ++it;
           if(resource_id < 2)
           {
-            coap_header_size = sizeof(headerToSend)/sizeof(headerToSend[0]);
+            coap_header_size = it;
             coap_header =  malloc (coap_header_size);
             for(int i= 0; i<coap_header_size;++i)
             {
@@ -700,7 +709,6 @@ void loop(void) {
           if(resource_id == 3)
           {
             //send specified block of .wellknown/core
-            Serial.println(F("debug")); 
             Serial.println(fragmentation_size,DEC);    
             byte payloadToSend[fragmentation_size];
             for(int i=0;i<fragmentation_size;++i)
@@ -874,17 +882,28 @@ byte * getRadioState()
   radioState[++iter] = 58;//:
   radioState[++iter] = testCarrier + 48; // 0 - false , 1 - true
   RADIO_PAYLOAD_SIZE = ++iter;
-  Serial.println(F("adsfgasfadf"));
-  Serial.println(iter);
   return radioState;
 }
 
 void addToMap(byte *value, int value_size)
 {
   button_map[map_iterator].etag = map_iterator;
-  button_map[map_iterator].payload = value;
+  button_map[map_iterator].payload = malloc (value_size);
+  for(int i=0;i<value_size;++i)
+  {
+    button_map[map_iterator].payload[i] = value[i];
+  }
+  button_map[map_iterator].payload_size = value_size;
   ++map_iterator;
 }
 
-
+bool ifMapHasKey(uint8_t key)
+{
+  for(int i=0;i<map_iterator;++i)
+  {
+    if(button_map[i].etag == key)
+      return true;
+  }
+  return false;
+}
 
