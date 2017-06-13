@@ -18,10 +18,11 @@ unsigned long start = 0; // time from start running program
 const uint16_t this_node = 01; //Smart Object node
 const uint16_t other_node = 00; //CoAP Server node
 
+//Structure of payload sending to smart object
 struct payload_t {
-  uint8_t header;
-  uint8_t state;
-  uint32_t value;
+  uint8_t header; // header which specifies: operation(2b): GET,PUT; resource(6b): LAMP, BUTTON 
+  uint8_t state; //specifies state of button: 0 - OFF, 255 - ON
+  uint32_t value; // value which depends from resource, time for button, light intesity for lamp
 };
 
 void setup() {
@@ -35,7 +36,6 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
   network.update(); // Check the network regularly
   int i = 0;
   while (Serial.available())
